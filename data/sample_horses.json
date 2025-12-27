@@ -1,0 +1,42 @@
+{
+  "horses": [
+    {
+      "name": "ドゥラメンテ",
+      "age": 5,
+      "sex": "牡",
+      "trainer": "友道康夫",
+      "owner": "キャロットファーム"
+    },
+    {
+      "name": "ゴールドシップ", 
+      "age": 6,
+      "sex": "牡",
+      "trainer": "須貝尚介",
+      "owner": "ゴドルフィン"
+    },
+    {
+      "name": "キタサンブラック",
+      "age": 6,
+      "sex": "牡",
+      "trainer": "清水久詞",
+      "owner": "大野商事"
+    }
+  ],
+  "jockeys": [
+    {
+      "name": "武豊",
+      "weight": 52,
+      "experience_years": 35
+    },
+    {
+      "name": "C.ルメール",
+      "weight": 54,
+      "experience_years": 15
+    },
+    {
+      "name": "川田将雅",
+      "weight": 53,
+      "experience_years": 20
+    }
+  ]
+}

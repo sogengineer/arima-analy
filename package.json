@@ -1,0 +1,50 @@
+{
+  "name": "arima-analysis",
+  "version": "1.0.0",
+  "description": "有馬記念分析システム",
+  "main": "dist/index.js",
+  "bin": {
+    "arima": "./dist/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc && mkdir -p dist/database && cp -r src/database/schema.sql dist/database/",
+    "c": "tsgo --noEmit",
+    "start": "node dist/index.js",
+    "dev": "tsx --watch src/index.ts",
+    "lint": "eslint src/**/*.ts",
+    "test": "vitest",
+    "fetch-jra": "tsx src/index.ts fetch-jra",
+    "extract-html": "tsx src/index.ts extract-html-only",
+    "fetch-and-extract": "tsx src/index.ts fetch-and-extract"
+  },
+  "keywords": [
+    "horseracing",
+    "analysis",
+    "arima",
+    "prediction"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@typescript/native-preview": "^7.0.0-dev.20251227.1",
+    "eslint": "^8.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.9.3",
+    "vitest": "^1.2.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.5.0",
+    "commander": "^11.1.0",
+    "iconv-lite": "^0.7.1",
+    "ml-logistic-regression": "^2.0.0",
+    "ml-matrix": "^6.10.0",
+    "ml-random-forest": "^2.1.0",
+    "regression": "^2.0.1",
+    "simple-statistics": "^7.8.8"
+  }
+}

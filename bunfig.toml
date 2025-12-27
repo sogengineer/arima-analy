@@ -1,0 +1,15 @@
+[install]
+# Install packages to node_modules
+auto = "yarn"
+
+[install.scopes]
+# Trust packages from these scopes
+"@types" = { "trust" = true }
+
+# Configure package manager
+[install.cache]
+dir = "~/.bun/install/cache"
+
+# TypeScript configuration
+[typescript]
+compilerOptions = { strict = true }
