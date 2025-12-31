@@ -1,42 +1,125 @@
 {
+  "url": "",
+  "extractedAt": "2025-12-31T00:00:00.000Z",
+  "raceInfo": {
+    "date": "2016-12-25",
+    "venue": "中山",
+    "raceNumber": 11,
+    "raceName": "有馬記念（サンプルデータ）",
+    "distance": 2500,
+    "trackCondition": "良",
+    "courseType": "芝",
+    "raceClass": "G1"
+  },
+  "horseCount": 3,
   "horses": [
     {
-      "name": "ドゥラメンテ",
-      "age": 5,
-      "sex": "牡",
-      "trainer": "友道康夫",
-      "owner": "キャロットファーム"
+      "basicInfo": {
+        "name": "ドゥラメンテ",
+        "age": 5,
+        "sex": "牡",
+        "color": "鹿毛",
+        "ownerName": "キャロットファーム",
+        "breederName": "ノーザンファーム",
+        "trainerName": "友道康夫",
+        "trainerDivision": "栗東"
+      },
+      "bloodline": {
+        "sire": "キングカメハメハ",
+        "mare": "アドマイヤグルーヴ",
+        "maresSire": "サンデーサイレンス"
+      },
+      "jockey": {
+        "name": "C.ルメール",
+        "weight": 57
+      },
+      "raceInfo": {
+        "frameNumber": 1,
+        "horseNumber": 1,
+        "assignedWeight": 57,
+        "winOdds": 3.5,
+        "popularity": 1
+      },
+      "record": {
+        "wins": 5,
+        "places": 1,
+        "shows": 0,
+        "runs": 9,
+        "prizeMoney": "76,000万円"
+      },
+      "previousRaces": []
     },
     {
-      "name": "ゴールドシップ", 
-      "age": 6,
-      "sex": "牡",
-      "trainer": "須貝尚介",
-      "owner": "ゴドルフィン"
+      "basicInfo": {
+        "name": "ゴールドシップ",
+        "age": 6,
+        "sex": "牡",
+        "color": "芦毛",
+        "ownerName": "ゴドルフィン",
+        "breederName": "出口牧場",
+        "trainerName": "須貝尚介",
+        "trainerDivision": "栗東"
+      },
+      "bloodline": {
+        "sire": "ステイゴールド",
+        "mare": "ポイントフラッグ",
+        "maresSire": "メジロマックイーン"
+      },
+      "jockey": {
+        "name": "武豊",
+        "weight": 57
+      },
+      "raceInfo": {
+        "frameNumber": 2,
+        "horseNumber": 2,
+        "assignedWeight": 57,
+        "winOdds": 5.2,
+        "popularity": 2
+      },
+      "record": {
+        "wins": 13,
+        "places": 4,
+        "shows": 3,
+        "runs": 28,
+        "prizeMoney": "133,765万円"
+      },
+      "previousRaces": []
     },
     {
-      "name": "キタサンブラック",
-      "age": 6,
-      "sex": "牡",
-      "trainer": "清水久詞",
-      "owner": "大野商事"
-    }
-  ],
-  "jockeys": [
-    {
-      "name": "武豊",
-      "weight": 52,
-      "experience_years": 35
-    },
-    {
-      "name": "C.ルメール",
-      "weight": 54,
-      "experience_years": 15
-    },
-    {
-      "name": "川田将雅",
-      "weight": 53,
-      "experience_years": 20
+      "basicInfo": {
+        "name": "キタサンブラック",
+        "age": 6,
+        "sex": "牡",
+        "color": "鹿毛",
+        "ownerName": "大野商事",
+        "breederName": "ヤナガワ牧場",
+        "trainerName": "清水久詞",
+        "trainerDivision": "栗東"
+      },
+      "bloodline": {
+        "sire": "ブラックタイド",
+        "mare": "シュガーハート",
+        "maresSire": "サクラバクシンオー"
+      },
+      "jockey": {
+        "name": "川田将雅",
+        "weight": 57
+      },
+      "raceInfo": {
+        "frameNumber": 3,
+        "horseNumber": 3,
+        "assignedWeight": 57,
+        "winOdds": 4.8,
+        "popularity": 3
+      },
+      "record": {
+        "wins": 12,
+        "places": 2,
+        "shows": 4,
+        "runs": 20,
+        "prizeMoney": "187,684万円"
+      },
+      "previousRaces": []
     }
   ]
 }
