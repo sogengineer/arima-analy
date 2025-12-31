@@ -155,31 +155,12 @@ program
   });
 
 program
-  .command('import-csv')
-  .description('CSVファイルからデータをインポート')
-  .argument('<file>', 'CSVファイルのパス')
-  .argument('<type>', 'データタイプ (horses|jockeys|results)')
-  .action(async (file: string, type: 'horses' | 'jockeys' | 'results') => {
-    const command = new ManualDataCommand();
-    await command.importFromCSV(file, type);
-  });
-
-program
   .command('add-horse')
   .description('馬を手動で追加')
   .argument('<data>', 'JSON形式の馬データ')
   .action(async (data: string) => {
     const command = new ManualDataCommand();
     await command.addSingleHorse(data);
-  });
-
-program
-  .command('add-result')
-  .description('レース結果を手動で追加')
-  .argument('<data>', 'JSON形式のレース結果データ')
-  .action(async (data: string) => {
-    const command = new ManualDataCommand();
-    await command.addSingleRaceResult(data);
   });
 
 program

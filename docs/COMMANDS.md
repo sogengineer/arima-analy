@@ -128,23 +128,6 @@ yarn start import-json data/sample_horses.json
 
 ---
 
-#### `import-csv <file> <type>`
-
-CSVファイルからデータをインポートします。
-
-```bash
-yarn start import-csv data/horses.csv horses
-```
-
-**type:**
-- `horses` - 競走馬データ
-- `jockeys` - 騎手データ
-- `results` - レース結果データ
-
-> **注意:** この機能は現在未実装です。`import-url` コマンドをお使いください。
-
----
-
 #### `import-url <file>`
 
 抽出済みJSONファイルをデータベースにインポートします。
@@ -167,18 +150,6 @@ yarn start add-horse "馬名,生年,性別,父,母,母父,調教師"
 ```bash
 yarn start add-horse "テスト馬,2020,牡,ディープインパクト,母馬名,キングカメハメハ,調教師名"
 ```
-
----
-
-#### `add-result <data>`
-
-レース結果を手動で登録します。
-
-```bash
-yarn start add-result "馬名,レース名,日付,着順,タイム"
-```
-
-> **注意:** この機能は現在未実装です。`import-url` コマンドをお使いください。
 
 ---
 
@@ -353,10 +324,8 @@ yarn start ml
 | `extract-html-only` | HTMLからデータ抽出（JSON保存） | 実装済み |
 | `fetch-and-extract` | 取得＋抽出の一括処理 | 実装済み |
 | `import-json` | JSONインポート | 実装済み |
-| `import-csv` | CSVインポート | **未実装** |
 | `import-url` | 抽出JSONをDBにインポート | 実装済み |
 | `add-horse` | 馬の手動登録 | 実装済み |
-| `add-result` | レース結果の手動登録 | **未実装** |
 | `horses` | 馬一覧表示 | 実装済み |
 | `jockeys` | 騎手一覧表示 | 実装済み |
 | `show-horses` | 馬一覧（血統付き） | 実装済み |

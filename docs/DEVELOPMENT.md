@@ -314,19 +314,6 @@ calculateRecentPerformanceScore(horseId: number): number {
 
 ---
 
-## 未実装機能
-
-以下の機能は現在スタブ（未実装）です：
-
-| 機能 | ファイル | 行番号 |
-|------|---------|--------|
-| CSVインポート | `src/commands/ManualDataCommand.ts` | 326-328 |
-| 単一レース結果登録 | `src/commands/ManualDataCommand.ts` | 342-344 |
-
-これらの機能を実装する場合は、既存の `importExtractedJSON()` メソッドを参考にしてください。
-
----
-
 ## テスト
 
 ```bash

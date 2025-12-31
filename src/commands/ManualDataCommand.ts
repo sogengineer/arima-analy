@@ -323,10 +323,6 @@ export class ManualDataCommand {
     await this.importExtractedJSON(file);
   }
 
-  async importFromCSV(_file: string, _type: 'horses' | 'jockeys' | 'results'): Promise<void> {
-    console.log('CSV インポートは未実装です。import-url コマンドをお使いください。');
-  }
-
   async addSingleHorse(data: string): Promise<void> {
     try {
       const horseData = JSON.parse(data);
@@ -337,9 +333,5 @@ export class ManualDataCommand {
     } finally {
       this.db.close();
     }
-  }
-
-  async addSingleRaceResult(_data: string): Promise<void> {
-    console.log('レース結果の個別登録は未実装です。import-url コマンドをお使いください。');
   }
 }
