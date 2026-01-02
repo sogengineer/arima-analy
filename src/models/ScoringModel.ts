@@ -2,11 +2,12 @@ import { ArimaDatabase } from '../database/Database';
 
 export interface ScoreComponents {
   recentPerformanceScore: number;
-  nakayamaAptitudeScore: number;
+  venueAptitudeScore: number;      // コース適性（会場別）
   distanceAptitudeScore: number;
   last3FAbilityScore: number;
   g1AchievementScore: number;
   rotationAptitudeScore: number;
+  jockeyScore: number;
 }
 
 export interface HorseScore extends ScoreComponents {
@@ -18,14 +19,15 @@ export interface HorseScore extends ScoreComponents {
 export class ScoringModel {
   private readonly db: ArimaDatabase;
   
-  // スコア重み設定
+  // スコア重み設定（7要素）
   private readonly WEIGHTS = {
-    recentPerformance: 0.25,
-    nakayamaAptitude: 0.20,
-    distanceAptitude: 0.15,
-    last3FAbility: 0.15,
-    g1Achievement: 0.15,
-    rotationAptitude: 0.10
+    recentPerformance: 0.20,   // 直近成績 20%
+    venueAptitude: 0.18,       // コース適性 18%
+    distanceAptitude: 0.12,    // 距離適性 12%
+    last3FAbility: 0.12,       // 上がり3F能力 12%
+    g1Achievement: 0.13,       // G1実績 13%
+    rotationAptitude: 0.10,    // ローテ適性 10%
+    jockey: 0.15               // 騎手能力 15%
   };
 
   constructor() {
@@ -39,13 +41,14 @@ export class ScoringModel {
     for (const horse of horses) {
       const components = await this.calculateScoreComponents(horse.id);
       
-      const totalScore = 
+      const totalScore =
         (components.recentPerformanceScore * this.WEIGHTS.recentPerformance) +
-        (components.nakayamaAptitudeScore * this.WEIGHTS.nakayamaAptitude) +
+        (components.venueAptitudeScore * this.WEIGHTS.venueAptitude) +
         (components.distanceAptitudeScore * this.WEIGHTS.distanceAptitude) +
         (components.last3FAbilityScore * this.WEIGHTS.last3FAbility) +
         (components.g1AchievementScore * this.WEIGHTS.g1Achievement) +
-        (components.rotationAptitudeScore * this.WEIGHTS.rotationAptitude);
+        (components.rotationAptitudeScore * this.WEIGHTS.rotationAptitude) +
+        (components.jockeyScore * this.WEIGHTS.jockey);
 
       scores.push({
         horseId: horse.id,
@@ -57,11 +60,12 @@ export class ScoringModel {
       // データベースにスコアを保存
       this.db.updateHorseScore(horse.id, null, {
         recent_performance_score: components.recentPerformanceScore,
-        course_aptitude_score: components.nakayamaAptitudeScore,
+        course_aptitude_score: components.venueAptitudeScore,
         distance_aptitude_score: components.distanceAptitudeScore,
         last_3f_ability_score: components.last3FAbilityScore,
         bloodline_score: components.g1AchievementScore,
-        rotation_score: components.rotationAptitudeScore
+        rotation_score: components.rotationAptitudeScore,
+        jockey_score: components.jockeyScore
       });
     }
 
@@ -69,14 +73,34 @@ export class ScoringModel {
   }
 
   private async calculateScoreComponents(horseId: number): Promise<ScoreComponents> {
+    // 馬情報を取得して調教師IDを得る（騎手はレース毎に異なるため直近の騎手を取得）
+    const horse = this.db.getHorseById(horseId);
+    const trainerId = horse?.trainer_id ?? null;
+
+    // 直近のレースエントリーから騎手IDを取得
+    const recentJockey = this.getRecentJockeyForHorse(horseId);
+
     return {
       recentPerformanceScore: this.calculateRecentPerformanceScore(horseId),
-      nakayamaAptitudeScore: this.calculateNakayamaAptitudeScore(horseId),
+      venueAptitudeScore: this.calculateVenueAptitudeScore(horseId, '中山'),
       distanceAptitudeScore: this.calculateDistanceAptitudeScore(horseId),
       last3FAbilityScore: this.calculateLast3FAbilityScore(horseId),
       g1AchievementScore: this.calculateG1AchievementScore(horseId),
-      rotationAptitudeScore: this.calculateRotationAptitudeScore(horseId)
+      rotationAptitudeScore: this.calculateRotationAptitudeScore(horseId),
+      jockeyScore: this.calculateJockeyScore(recentJockey, trainerId)
     };
+  }
+
+  private getRecentJockeyForHorse(horseId: number): number | null {
+    const result = this.db['db'].prepare(`
+      SELECT e.jockey_id
+      FROM race_entries e
+      JOIN races r ON e.race_id = r.id
+      WHERE e.horse_id = ? AND e.jockey_id IS NOT NULL
+      ORDER BY r.race_date DESC
+      LIMIT 1
+    `).get(horseId) as { jockey_id: number } | undefined;
+    return result?.jockey_id ?? null;
   }
 
   private calculateRecentPerformanceScore(horseId: number): number {
@@ -118,21 +142,21 @@ export class ScoringModel {
     return Math.min(score, 100); // 最大100点
   }
 
-  private calculateNakayamaAptitudeScore(horseId: number): number {
+  private calculateVenueAptitudeScore(horseId: number, venueName: string): number {
     const stmt = this.db['db'].prepare(`
-      SELECT wins, runs FROM course_performance 
-      WHERE horse_id = ? AND course_name = '中山'
+      SELECT wins, runs FROM course_performance
+      WHERE horse_id = ? AND course_name = ?
     `);
-    
-    const performance = stmt.get(horseId) as any;
-    
+
+    const performance = stmt.get(horseId, venueName) as any;
+
     if (!performance || performance.runs === 0) return 0;
 
     const winRate = performance.wins / performance.runs;
     let score = winRate * 100;
 
     // 実績補正
-    if (performance.runs >= 3) score *= 1.0;
+    if (performance.runs >= 3) score *= 1;
     else if (performance.runs === 2) score *= 0.8;
     else score *= 0.6;
 
@@ -249,6 +273,71 @@ export class ScoringModel {
 
     const score = (goodPerformances / totalIntervals) * 100;
     return Math.min(score, 100);
+  }
+
+  /**
+   * 騎手能力スコアを計算（有馬記念向け: 中山固定）
+   * 構成: 中山勝率(30%) + 中山G1勝率(30%) + 全体勝率(20%) + 調教師コンビ勝率(20%)
+   */
+  private calculateJockeyScore(jockeyId: number | null, trainerId: number | null): number {
+    if (!jockeyId) return 50; // デフォルト値
+
+    // 騎手の中山コース成績を取得（中山G1成績も含む）
+    const venueStats = this.db.getJockeyStats(jockeyId, '中山');
+
+    // 騎手の全体成績を取得
+    const overallStats = this.db.getJockeyOverallStats(jockeyId);
+
+    // 調教師とのコンビ成績を取得
+    const trainerComboStats = trainerId
+      ? this.db.getJockeyTrainerStats(jockeyId, trainerId)
+      : null;
+
+    // 中山勝率スコア（30%）
+    let venueWinScore = 0;
+    if (venueStats && venueStats.total_runs > 0) {
+      const winRate = venueStats.wins / venueStats.total_runs;
+      venueWinScore = winRate * 100;
+      // 出走数による信頼度補正
+      if (venueStats.total_runs >= 50) venueWinScore *= 1;
+      else if (venueStats.total_runs >= 20) venueWinScore *= 0.9;
+      else if (venueStats.total_runs >= 10) venueWinScore *= 0.8;
+      else venueWinScore *= 0.6;
+    }
+
+    // 中山G1勝率スコア（30%）- 中山G1での実績
+    let venueG1Score = 0;
+    if (venueStats && venueStats.venue_g1_runs > 0) {
+      const g1WinRate = venueStats.venue_g1_wins / venueStats.venue_g1_runs;
+      venueG1Score = g1WinRate * 100;
+      // G1出走数による補正
+      if (venueStats.venue_g1_runs >= 10) venueG1Score *= 1;
+      else if (venueStats.venue_g1_runs >= 5) venueG1Score *= 0.9;
+      else venueG1Score *= 0.7;
+    }
+
+    // 全体勝率スコア（20%）
+    let overallWinScore = 0;
+    if (overallStats && overallStats.total_runs > 0) {
+      const winRate = overallStats.wins / overallStats.total_runs;
+      overallWinScore = winRate * 100;
+    }
+
+    // 調教師コンビ勝率スコア（20%）
+    let trainerComboScore = 50; // デフォルト
+    if (trainerComboStats && trainerComboStats.total_runs >= 3) {
+      const winRate = trainerComboStats.wins / trainerComboStats.total_runs;
+      trainerComboScore = winRate * 100;
+    }
+
+    // 重み付け合計
+    const totalScore =
+      (venueWinScore * 0.30) +
+      (venueG1Score * 0.30) +
+      (overallWinScore * 0.20) +
+      (trainerComboScore * 0.20);
+
+    return Math.min(totalScore, 100);
   }
 
   close(): void {

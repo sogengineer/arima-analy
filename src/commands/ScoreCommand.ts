@@ -7,6 +7,7 @@ interface ScoreComponents {
   last3FAbilityScore: number;       // 上がり3F能力
   g1AchievementScore: number;       // G1実績
   rotationAptitudeScore: number;    // ローテ適性
+  jockeyScore: number;              // 騎手能力
 }
 
 interface HorseScore extends ScoreComponents {
@@ -36,12 +37,13 @@ export class ScoreCommand {
 
   // スコア重み設定
   private readonly WEIGHTS = {
-    recentPerformance: 0.25,    // 直近成績
-    venueAptitude: 0.20,        // コース適性
-    distanceAptitude: 0.15,     // 距離適性
-    last3FAbility: 0.15,        // 上がり3F能力
-    g1Achievement: 0.15,        // G1実績
-    rotationAptitude: 0.10      // ローテ適性
+    recentPerformance: 0.20,    // 直近成績 20%
+    venueAptitude: 0.18,        // コース適性 18%
+    distanceAptitude: 0.12,     // 距離適性 12%
+    last3FAbility: 0.12,        // 上がり3F能力 12%
+    g1Achievement: 0.13,        // G1実績 13%
+    rotationAptitude: 0.10,     // ローテ適性 10%
+    jockey: 0.15                // 騎手能力 15%
   };
 
   constructor() {
@@ -90,9 +92,9 @@ export class ScoreCommand {
       console.log('🎯 スコアリングモデルで総合評価を算出中...\n');
       console.log(`🏁 対象レース: ${this.raceInfo.name}`);
       console.log(`   ${this.raceInfo.date} ${this.raceInfo.venue} ${this.raceInfo.raceType}${this.raceInfo.distance}m\n`);
-      console.log('📊 スコア配分:');
-      console.log(`  直近成績: 25% | ${this.raceInfo.venue}適性: 20% | 距離適性: 15%`);
-      console.log('  上がり3F: 15% | G1実績: 15% | ローテ: 10%\n');
+      console.log('📊 スコア配分（7要素）:');
+      console.log(`  直近成績: 20% | ${this.raceInfo.venue}適性: 18% | 距離適性: 12% | 上がり3F: 12%`);
+      console.log('  G1実績: 13% | ローテ: 10% | 騎手能力: 15%\n');
 
       // レースに出走する馬を取得
       const entries = this.db.getRaceEntries(race.id);
@@ -108,16 +110,17 @@ export class ScoreCommand {
 
       for (const entry of entries) {
         // 各スコア要素を計算
-        const components = this.calculateScoreComponents(entry.horse_id);
+        const components = this.calculateScoreComponents(entry.horse_id, entry.jockey_id, entry.trainer_id);
 
-        // 重み付け総合スコア
+        // 重み付け総合スコア（7要素）
         const totalScore =
           components.recentPerformanceScore * this.WEIGHTS.recentPerformance +
           components.venueAptitudeScore * this.WEIGHTS.venueAptitude +
           components.distanceAptitudeScore * this.WEIGHTS.distanceAptitude +
           components.last3FAbilityScore * this.WEIGHTS.last3FAbility +
           components.g1AchievementScore * this.WEIGHTS.g1Achievement +
-          components.rotationAptitudeScore * this.WEIGHTS.rotationAptitude;
+          components.rotationAptitudeScore * this.WEIGHTS.rotationAptitude +
+          components.jockeyScore * this.WEIGHTS.jockey;
 
         horseScores.push({
           horseId: entry.horse_id,
@@ -134,7 +137,8 @@ export class ScoreCommand {
           distance_aptitude_score: components.distanceAptitudeScore,
           last_3f_ability_score: components.last3FAbilityScore,
           bloodline_score: components.g1AchievementScore,
-          rotation_score: components.rotationAptitudeScore
+          rotation_score: components.rotationAptitudeScore,
+          jockey_score: components.jockeyScore
         });
       }
 
@@ -186,14 +190,15 @@ export class ScoreCommand {
     }
   }
 
-  private calculateScoreComponents(horseId: number): ScoreComponents {
+  private calculateScoreComponents(horseId: number, jockeyId?: number, trainerId?: number): ScoreComponents {
     return {
       recentPerformanceScore: this.calculateRecentPerformanceScore(horseId),
       venueAptitudeScore: this.calculateVenueAptitudeScore(horseId),
       distanceAptitudeScore: this.calculateDistanceAptitudeScore(horseId),
       last3FAbilityScore: this.calculateLast3FAbilityScore(horseId),
       g1AchievementScore: this.calculateG1AchievementScore(horseId),
-      rotationAptitudeScore: this.calculateRotationAptitudeScore(horseId)
+      rotationAptitudeScore: this.calculateRotationAptitudeScore(horseId),
+      jockeyScore: this.calculateJockeyScore(jockeyId, trainerId)
     };
   }
 
@@ -371,13 +376,81 @@ export class ScoreCommand {
     return Math.min(score, 100);
   }
 
+  /**
+   * 騎手能力スコアを計算
+   * 構成: コース勝率(30%) + コースG1勝率(30%) + 全体勝率(20%) + 調教師コンビ勝率(20%)
+   */
+  private calculateJockeyScore(jockeyId?: number, trainerId?: number): number {
+    if (!jockeyId) return 50; // デフォルト値
+
+    // レース会場を取得（デフォルト: 中山）
+    const venueName = this.raceInfo?.venue || '中山';
+
+    // 騎手の指定コース成績を取得（コースG1成績も含む）
+    const venueStats = this.db.getJockeyStats(jockeyId, venueName);
+
+    // 騎手の全体成績を取得
+    const overallStats = this.db.getJockeyOverallStats(jockeyId);
+
+    // 調教師とのコンビ成績を取得
+    const trainerComboStats = trainerId
+      ? this.db.getJockeyTrainerStats(jockeyId, trainerId)
+      : null;
+
+    // コース勝率スコア（30%）
+    let venueWinScore = 0;
+    if (venueStats && venueStats.total_runs > 0) {
+      const winRate = venueStats.wins / venueStats.total_runs;
+      venueWinScore = winRate * 100;
+      // 出走数による信頼度補正
+      if (venueStats.total_runs >= 50) venueWinScore *= 1;
+      else if (venueStats.total_runs >= 20) venueWinScore *= 0.9;
+      else if (venueStats.total_runs >= 10) venueWinScore *= 0.8;
+      else venueWinScore *= 0.6;
+    }
+
+    // コースG1勝率スコア（30%）
+    let venueG1Score = 0;
+    if (venueStats && venueStats.venue_g1_runs > 0) {
+      const g1WinRate = venueStats.venue_g1_wins / venueStats.venue_g1_runs;
+      venueG1Score = g1WinRate * 100;
+      // G1出走数による補正
+      if (venueStats.venue_g1_runs >= 10) venueG1Score *= 1;
+      else if (venueStats.venue_g1_runs >= 5) venueG1Score *= 0.9;
+      else venueG1Score *= 0.7;
+    }
+
+    // 全体勝率スコア（20%）
+    let overallWinScore = 0;
+    if (overallStats && overallStats.total_runs > 0) {
+      const winRate = overallStats.wins / overallStats.total_runs;
+      overallWinScore = winRate * 100;
+    }
+
+    // 調教師コンビ勝率スコア（20%）
+    let trainerComboScore = 50; // デフォルト
+    if (trainerComboStats && trainerComboStats.total_runs >= 3) {
+      const winRate = trainerComboStats.wins / trainerComboStats.total_runs;
+      trainerComboScore = winRate * 100;
+    }
+
+    // 重み付け合計
+    const totalScore =
+      (venueWinScore * 0.30) +
+      (venueG1Score * 0.30) +
+      (overallWinScore * 0.20) +
+      (trainerComboScore * 0.20);
+
+    return Math.min(totalScore, 100);
+  }
+
   private displayOverallRanking(scores: HorseScore[]): void {
     const venueName = this.raceInfo?.venue || 'コース';
 
     console.log('🏆 総合スコアランキング:');
-    console.log('='.repeat(80));
-    console.log(`馬番 馬名              総合    直近  ${venueName.padEnd(4)} 距離  3F   G1   ローテ`);
-    console.log('-'.repeat(80));
+    console.log('='.repeat(90));
+    console.log(`馬番 馬名              総合    直近  ${venueName.padEnd(4)} 距離  3F   G1   ローテ 騎手`);
+    console.log('-'.repeat(90));
 
     scores.forEach((score, index) => {
       const rank = index + 1;
@@ -392,8 +465,9 @@ export class ScoreCommand {
       const last3f = score.last3FAbilityScore.toFixed(0).padStart(4);
       const g1 = score.g1AchievementScore.toFixed(0).padStart(4);
       const rotation = score.rotationAptitudeScore.toFixed(0).padStart(4);
+      const jockey = score.jockeyScore.toFixed(0).padStart(4);
 
-      console.log(`${medal}${num} ${name} ${total}  ${recent} ${venue} ${distance} ${last3f} ${g1} ${rotation}`);
+      console.log(`${medal}${num} ${name} ${total}  ${recent} ${venue} ${distance} ${last3f} ${g1} ${rotation} ${jockey}`);
     });
 
     console.log('');
@@ -412,11 +486,12 @@ export class ScoreCommand {
       console.log('-'.repeat(50));
 
       const components = [
-        { name: '直近成績', score: horse.recentPerformanceScore, weight: 25 },
-        { name: `${venueName}適性`, score: horse.venueAptitudeScore, weight: 20 },
-        { name: '距離適性', score: horse.distanceAptitudeScore, weight: 15 },
-        { name: '上がり3F', score: horse.last3FAbilityScore, weight: 15 },
-        { name: 'G1実績  ', score: horse.g1AchievementScore, weight: 15 },
+        { name: '直近成績', score: horse.recentPerformanceScore, weight: 20 },
+        { name: `${venueName}適性`, score: horse.venueAptitudeScore, weight: 18 },
+        { name: '騎手能力', score: horse.jockeyScore, weight: 15 },
+        { name: 'G1実績  ', score: horse.g1AchievementScore, weight: 13 },
+        { name: '距離適性', score: horse.distanceAptitudeScore, weight: 12 },
+        { name: '上がり3F', score: horse.last3FAbilityScore, weight: 12 },
         { name: 'ローテ  ', score: horse.rotationAptitudeScore, weight: 10 }
       ];
 

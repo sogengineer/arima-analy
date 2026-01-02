@@ -560,14 +560,14 @@ export class ArimaDatabase {
     return this.db.prepare('SELECT * FROM races WHERE race_name LIKE ?').get(`%${idOrName}%`) as DBRace | undefined;
   }
 
-  public getRaceEntries(raceId: number): { horse_id: number; horse_name: string; horse_number: number }[] {
+  public getRaceEntries(raceId: number): { horse_id: number; horse_name: string; horse_number: number; jockey_id?: number; trainer_id?: number }[] {
     return this.db.prepare(`
-      SELECT e.horse_id, h.name as horse_name, e.horse_number
+      SELECT e.horse_id, h.name as horse_name, e.horse_number, e.jockey_id, h.trainer_id
       FROM race_entries e
       JOIN horses h ON e.horse_id = h.id
       WHERE e.race_id = ?
       ORDER BY e.horse_number
-    `).all(raceId) as { horse_id: number; horse_name: string; horse_number: number }[];
+    `).all(raceId) as { horse_id: number; horse_name: string; horse_number: number; jockey_id?: number; trainer_id?: number }[];
   }
 
   public getAllVenues(): DBVenue[] {
@@ -631,8 +631,8 @@ export class ArimaDatabase {
     `).all();
   }
 
-  public getJockeyStats(jockeyId: number): any {
-    // 騎手の中山G1勝率を計算
+  public getJockeyStats(jockeyId: number, venueName: string = '中山'): any {
+    // 騎手の指定コース成績を計算
     const stats = this.db.prepare(`
       SELECT
         COUNT(*) as total_runs,
@@ -642,23 +642,51 @@ export class ArimaDatabase {
       JOIN races r ON e.race_id = r.id
       JOIN venues v ON r.venue_id = v.id
       LEFT JOIN race_results rr ON rr.entry_id = e.id
-      WHERE e.jockey_id = ? AND v.name = '中山'
-    `).get(jockeyId) as any;
+      WHERE e.jockey_id = ? AND v.name = ?
+    `).get(jockeyId, venueName) as any;
 
     const g1Stats = this.db.prepare(`
       SELECT
-        COUNT(*) as nakayama_g1_runs,
-        SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) as nakayama_g1_wins
+        COUNT(*) as venue_g1_runs,
+        SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) as venue_g1_wins
       FROM race_entries e
       JOIN races r ON e.race_id = r.id
       JOIN venues v ON r.venue_id = v.id
       LEFT JOIN race_results rr ON rr.entry_id = e.id
       WHERE e.jockey_id = ?
-        AND v.name = '中山'
+        AND v.name = ?
         AND (r.race_class LIKE '%G1%' OR r.race_class LIKE '%GI%')
-    `).get(jockeyId) as any;
+    `).get(jockeyId, venueName) as any;
 
     return { ...stats, ...g1Stats };
+  }
+
+  public getJockeyOverallStats(jockeyId: number): any {
+    // 騎手の全コースでの成績を計算
+    return this.db.prepare(`
+      SELECT
+        COUNT(*) as total_runs,
+        SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) as wins,
+        SUM(CASE WHEN rr.finish_position <= 2 THEN 1 ELSE 0 END) as places,
+        SUM(CASE WHEN rr.finish_position <= 3 THEN 1 ELSE 0 END) as shows
+      FROM race_entries e
+      LEFT JOIN race_results rr ON rr.entry_id = e.id
+      WHERE e.jockey_id = ?
+    `).get(jockeyId) as any;
+  }
+
+  public getJockeyTrainerStats(jockeyId: number, trainerId: number): any {
+    // 騎手と調教師のコンビ成績を計算
+    return this.db.prepare(`
+      SELECT
+        COUNT(*) as total_runs,
+        SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) as wins,
+        SUM(CASE WHEN rr.finish_position <= 3 THEN 1 ELSE 0 END) as places
+      FROM race_entries e
+      JOIN horses h ON e.horse_id = h.id
+      LEFT JOIN race_results rr ON rr.entry_id = e.id
+      WHERE e.jockey_id = ? AND h.trainer_id = ?
+    `).get(jockeyId, trainerId) as any;
   }
 
   public close(): void {
