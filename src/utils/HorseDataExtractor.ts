@@ -57,13 +57,16 @@ export class HorseDataExtractor {
     const horses: HorseData[] = [];
 
     // 馬データのマッチング（マルチライン対応、前走データまで含める）
-    // 馬番の後にブリンカーアイコン等が入る場合があるため .*? で対応
+    // 馬番が空の場合（枠順未確定）にも対応: (\d+)? で馬番をオプションに
     const horseMatches = this.htmlContent.matchAll(
-      /<tr>\s*<td class="waku">.*?<td class="num">(\d+).*?<\/td>\s*<td class="horse">(.*?)<\/td>\s*<td class="jockey">(.*?)<\/td>(.*?)<\/tr>/gs
+      /<tr>\s*<td class="waku">.*?<td class="num">(?:<span[^>]*>.*?<\/span>\s*)?(\d+)?.*?<\/td>\s*<td class="horse">(.*?)<\/td>\s*<td class="jockey">(.*?)<\/td>(.*?)<\/tr>/gs
     );
 
+    let index = 0;
     for (const match of horseMatches) {
-      const horseNumber = Number.parseInt(match[1]);
+      index++;
+      // 馬番が空の場合は出走順（index）を使用
+      const horseNumber = match[1] ? Number.parseInt(match[1]) : index;
       const horseData = match[2];
       const jockeyData = match[3];
       const pastRacesData = match[4]; // 前走データ部分

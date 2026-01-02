@@ -9,47 +9,81 @@ export class ManualDataCommand {
     this.db = new ArimaDatabase();
   }
 
+  /**
+   * 抽出されたJSONファイルをデータベースにインポートする
+   *
+   * @description
+   * JRA出馬表から抽出したJSONデータをDBに登録する。
+   * 新規データはINSERT、既存データはUPDATE（UPSERT処理）。
+   *
+   * @param jsonFilePath - 抽出済みJSONファイルのパス（ExtractedRaceData形式）
+   *
+   * @example
+   * ```typescript
+   * const command = new ManualDataCommand();
+   * await command.importExtractedJSON('data/horse-extracted-data.json');
+   * ```
+   *
+   * @remarks
+   * 処理順序:
+   * 1. レース情報の登録（races テーブル）
+   * 2. 馬データの登録（horses テーブル + 血統マスタ）
+   * 3. 出馬表エントリの登録（race_entries テーブル）
+   * 4. 前走データのインポート（過去レース + 結果）
+   */
   async importExtractedJSON(jsonFilePath: string): Promise<void> {
     try {
       console.log(`📥 抽出されたJSONファイルからDBにインポート中: ${jsonFilePath}`);
 
+      // JSONファイルをExtractedRaceData型にパース
       const jsonData: ExtractedRaceData = JSON.parse(readFileSync(jsonFilePath, 'utf-8'));
 
-      // レース情報をインポート
-      const raceInfo = jsonData.raceInfo;
-      const raceType = this.parseRaceType(raceInfo.courseType);
-      const { id: raceId, updated: raceUpdated } = this.db.insertRace({
-        raceDate: raceInfo.date,
-        venue: raceInfo.venue,
-        raceNumber: raceInfo.raceNumber,
-        raceName: raceInfo.raceName,
-        raceClass: raceInfo.raceClass,
-        raceType: raceType,
-        distance: raceInfo.distance,
-        trackCondition: this.parseTrackCondition(raceInfo.trackCondition),
-        totalHorses: jsonData.horseCount
-      });
-      console.log(`🏁 レース${raceUpdated ? '更新' : '登録'}: ${raceInfo.raceName} (ID: ${raceId})`);
+      // ========================================
+      // トランザクション内で全データをインポート
+      // エラー時は自動ロールバック
+      // ========================================
+      const result = this.db.runInTransaction(() => {
+        // ========================================
+        // 1. レース情報の登録（races テーブル）
+        // ========================================
+        const raceInfo = jsonData.raceInfo;
+        const raceType = this.parseRaceType(raceInfo.courseType);
+        const { id: raceId, updated: raceUpdated } = this.db.insertRace({
+          raceDate: raceInfo.date,           // 開催日 (YYYY-MM-DD)
+          venue: raceInfo.venue,             // 競馬場名（中山, 東京, etc.）
+          raceNumber: raceInfo.raceNumber,   // レース番号（1-12）
+          raceName: raceInfo.raceName,       // レース名（有馬記念, etc.）
+          raceClass: raceInfo.raceClass,     // クラス（G1, G2, etc.）
+          raceType: raceType,                // 馬場（芝, ダート, 障害）
+          distance: raceInfo.distance,       // 距離（メートル）
+          trackCondition: this.parseTrackCondition(raceInfo.trackCondition), // 馬場状態（良, 稍重, 重, 不良）
+          totalHorses: jsonData.horseCount   // 出走頭数
+        });
+        console.log(`🏁 レース${raceUpdated ? '更新' : '登録'}: ${raceInfo.raceName} (ID: ${raceId})`);
 
-      // 馬データのインポート
-      let horseInsertCount = 0;
-      let horseUpdateCount = 0;
-      let entryCount = 0;
+        // ========================================
+        // 2. 馬データのインポート（ループ処理）
+        // ========================================
+        let horseInsertCount = 0;
+        let horseUpdateCount = 0;
+        let entryCount = 0;
 
-      for (const horse of jsonData.horses) {
-        try {
-          // 馬を登録（血統情報含む）- UPSERT対応
+        for (const horse of jsonData.horses) {
+          // ----------------------------------------
+          // 2-1. 馬を登録（horses テーブル + 血統マスタ）
+          // UPSERT: 馬名+父+母で既存チェック → 存在時UPDATE/不在時INSERT
+          // ----------------------------------------
           const { id: horseId, updated } = this.db.insertHorseWithBloodline({
-            name: horse.basicInfo.name,
-            birthYear: this.calculateBirthYear(horse.basicInfo.age),
-            sex: horse.basicInfo.sex,
-            sire: horse.bloodline.sire,
-            mare: horse.bloodline.mare,
-            maresSire: horse.bloodline.maresSire,
-            trainer: horse.basicInfo.trainerName,
-            trainerStable: horse.basicInfo.trainerDivision,
-            owner: horse.basicInfo.ownerName,
-            breeder: horse.basicInfo.breederName
+            name: horse.basicInfo.name,                           // 馬名
+            birthYear: this.calculateBirthYear(horse.basicInfo.age), // 生年（現在年 - 馬齢）
+            sex: horse.basicInfo.sex,                             // 性別（牡, 牝, 騸）
+            sire: horse.bloodline.sire,                           // 父馬名 → sires テーブルに自動登録
+            mare: horse.bloodline.mare,                           // 母馬名 → mares テーブルに自動登録
+            maresSire: horse.bloodline.maresSire,                 // 母父馬名 → sires テーブルに自動登録
+            trainer: horse.basicInfo.trainerName,                 // 調教師名 → trainers テーブルに自動登録
+            trainerStable: horse.basicInfo.trainerDivision,       // 厩舎（美浦, 栗東）
+            owner: horse.basicInfo.ownerName,                     // 馬主名 → owners テーブルに自動登録
+            breeder: horse.basicInfo.breederName                  // 生産者名 → breeders テーブルに自動登録
           });
           if (updated) {
             horseUpdateCount++;
@@ -57,34 +91,41 @@ export class ManualDataCommand {
             horseInsertCount++;
           }
 
-          // 出馬表エントリを登録
-          const { id: entryId } = this.db.insertRaceEntry(raceId, {
-            horseName: horse.basicInfo.name,
-            jockeyName: horse.jockey.name,
-            frameNumber: horse.raceInfo.frameNumber,
-            horseNumber: horse.raceInfo.horseNumber,
-            assignedWeight: horse.jockey.weight,
-            winOdds: horse.raceInfo.winOdds,
-            popularity: horse.raceInfo.popularity,
-            careerWins: horse.record.wins,
-            careerPlaces: horse.record.places,
-            careerShows: horse.record.shows,
-            careerRuns: horse.record.runs,
-            totalPrizeMoney: horse.record.prizeMoney
+          // ----------------------------------------
+          // 2-2. 出馬表エントリの登録（race_entries テーブル）
+          // UPSERT: race_id + horse_id で既存チェック（同じ馬は1レースに1回のみ）
+          // ----------------------------------------
+          this.db.insertRaceEntry(raceId, {
+            horseName: horse.basicInfo.name,            // 馬名（horses テーブルとの紐付け用）
+            sireName: horse.bloodline.sire,             // 父名（馬の一意特定用）
+            mareName: horse.bloodline.mare,             // 母名（馬の一意特定用）
+            jockeyName: horse.jockey.name,              // 騎手名 → jockeys テーブルに自動登録
+            frameNumber: horse.raceInfo.frameNumber,    // 枠番（1-8）
+            horseNumber: horse.raceInfo.horseNumber,    // 馬番（1-18）
+            assignedWeight: horse.jockey.weight,        // 斤量（kg）
+            winOdds: horse.raceInfo.winOdds,            // 単勝オッズ
+            popularity: horse.raceInfo.popularity,      // 人気順位
+            careerWins: horse.record.wins,              // 通算勝利数
+            careerPlaces: horse.record.places,          // 通算2着数
+            careerShows: horse.record.shows,            // 通算3着数
+            careerRuns: horse.record.runs,              // 通算出走数
+            totalPrizeMoney: horse.record.prizeMoney    // 通算獲得賞金
           });
           entryCount++;
 
-          // 前走データをインポート
-          await this.importPreviousRaces(horse, horseId);
-
-        } catch (error) {
-          console.error(`馬 ${horse.basicInfo.name} のインポートに失敗:`, error);
+          // ----------------------------------------
+          // 2-3. 前走データのインポート
+          // 過去レース情報 + 結果 + 馬場適性を登録
+          // ----------------------------------------
+          this.importPreviousRaces(horse, horseId);
         }
-      }
+
+        return { horseInsertCount, horseUpdateCount, entryCount };
+      });
 
       console.log('✅ 抽出JSONからのDBインポート完了');
-      console.log(`🐎 馬: 新規${horseInsertCount}頭, 更新${horseUpdateCount}頭`);
-      console.log(`📋 出馬表: ${entryCount}件`);
+      console.log(`🐎 馬: 新規${result.horseInsertCount}頭, 更新${result.horseUpdateCount}頭`);
+      console.log(`📋 出馬表: ${result.entryCount}件`);
 
     } catch (error) {
       console.error('❌ 抽出JSONからのインポートに失敗:', error);
@@ -93,7 +134,7 @@ export class ManualDataCommand {
     }
   }
 
-  private async importPreviousRaces(horse: HorseData, horseId: number): Promise<void> {
+  private importPreviousRaces(horse: HorseData, horseId: number): void {
     if (!horse.previousRaces || horse.previousRaces.length === 0) return;
 
     for (const prevRace of horse.previousRaces) {
@@ -113,9 +154,11 @@ export class ManualDataCommand {
           totalHorses: prevRace.totalHorses
         });
 
-        // 前走のエントリを登録
+        // 前走のエントリを登録（血統情報で馬を一意特定）
         const { id: entryId } = this.db.insertRaceEntry(prevRaceId, {
           horseName: horse.basicInfo.name,
+          sireName: horse.bloodline.sire,      // 父名（馬の一意特定用）
+          mareName: horse.bloodline.mare,      // 母名（馬の一意特定用）
           jockeyName: prevRace.jockey,
           horseNumber: prevRace.gateNumber,
           assignedWeight: prevRace.weight,

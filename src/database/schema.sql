@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS jockeys (
 -- 競走馬テーブル（血統情報含む）
 CREATE TABLE IF NOT EXISTS horses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
     birth_year INTEGER,
     sex TEXT CHECK(sex IN ('牡', '牝', '騸')),
     coat_color TEXT,
@@ -85,7 +85,8 @@ CREATE TABLE IF NOT EXISTS horses (
     FOREIGN KEY (mare_id) REFERENCES mares(id),
     FOREIGN KEY (trainer_id) REFERENCES trainers(id),
     FOREIGN KEY (owner_id) REFERENCES owners(id),
-    FOREIGN KEY (breeder_id) REFERENCES breeders(id)
+    FOREIGN KEY (breeder_id) REFERENCES breeders(id),
+    UNIQUE(name, sire_id, mare_id)
 );
 
 -- レースマスタ
@@ -111,6 +112,7 @@ CREATE TABLE IF NOT EXISTS races (
 );
 
 -- 出馬表（レースエントリー）
+-- 一意制約: レースID + 馬ID（同じ馬は同じレースに1回のみ出走）
 CREATE TABLE IF NOT EXISTS race_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     race_id INTEGER NOT NULL,
@@ -134,7 +136,7 @@ CREATE TABLE IF NOT EXISTS race_entries (
     FOREIGN KEY (race_id) REFERENCES races(id),
     FOREIGN KEY (horse_id) REFERENCES horses(id),
     FOREIGN KEY (jockey_id) REFERENCES jockeys(id),
-    UNIQUE(race_id, horse_number)
+    UNIQUE(race_id, horse_id)
 );
 
 -- レース結果

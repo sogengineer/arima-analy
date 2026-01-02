@@ -286,6 +286,8 @@ export interface RaceImportData {
 
 export interface EntryImportData {
   horseName: string;
+  sireName?: string;    // 父名（馬の一意特定用）
+  mareName?: string;    // 母名（馬の一意特定用）
   jockeyName: string;
   frameNumber?: number;
   horseNumber: number;

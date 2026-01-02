@@ -44,8 +44,8 @@ export class ArimaDatabase {
     return result.lastInsertRowid as number;
   }
 
-  public getOrCreateSire(name: string): number {
-    if (!name) return 0;
+  public getOrCreateSire(name: string): number | null {
+    if (!name || name.trim() === '') return null;
     const existing = this.db.prepare('SELECT id FROM sires WHERE name = ?').get(name) as DBSire | undefined;
     if (existing) return existing.id;
 
@@ -53,8 +53,8 @@ export class ArimaDatabase {
     return result.lastInsertRowid as number;
   }
 
-  public getOrCreateMare(name: string, maresSireName?: string): number {
-    if (!name) return 0;
+  public getOrCreateMare(name: string, maresSireName?: string): number | null {
+    if (!name || name.trim() === '') return null;
     const existing = this.db.prepare('SELECT id FROM mares WHERE name = ?').get(name) as DBMare | undefined;
     if (existing) return existing.id;
 
@@ -110,7 +110,13 @@ export class ArimaDatabase {
     const ownerId = data.owner ? this.getOrCreateOwner(data.owner) : null;
     const breederId = data.breeder ? this.getOrCreateBreeder(data.breeder) : null;
 
-    const existing = this.db.prepare('SELECT id FROM horses WHERE name = ?').get(data.name) as DBHorse | undefined;
+    // 既存チェック: 馬名 + 父 + 母 で一意判定（同姓同名馬の区別）
+    const existing = this.db.prepare(`
+      SELECT id FROM horses
+      WHERE name = ?
+        AND (sire_id = ? OR (sire_id IS NULL AND ? IS NULL))
+        AND (mare_id = ? OR (mare_id IS NULL AND ? IS NULL))
+    `).get(data.name, sireId, sireId, mareId, mareId) as DBHorse | undefined;
 
     if (existing) {
       // 既存の馬を更新
@@ -158,6 +164,25 @@ export class ArimaDatabase {
 
   public getHorseByName(name: string): DBHorse | undefined {
     return this.db.prepare('SELECT * FROM horses WHERE name = ?').get(name) as DBHorse | undefined;
+  }
+
+  /**
+   * 馬名 + 父名 + 母名 で馬を検索（同姓同名馬の区別用）
+   * JOINで1クエリに最適化
+   */
+  public getHorseByNameAndBloodline(name: string, sireName?: string, mareName?: string): DBHorse | undefined {
+    return this.db.prepare(`
+      SELECT h.* FROM horses h
+      LEFT JOIN sires s ON h.sire_id = s.id
+      LEFT JOIN mares m ON h.mare_id = m.id
+      WHERE h.name = ?
+        AND (? IS NULL OR s.name = ?)
+        AND (? IS NULL OR m.name = ?)
+    `).get(
+      name,
+      sireName ?? null, sireName ?? null,
+      mareName ?? null, mareName ?? null
+    ) as DBHorse | undefined;
   }
 
   public getHorseWithBloodline(horseId: number): HorseDetail | undefined {
@@ -250,23 +275,27 @@ export class ArimaDatabase {
   // ============================================
 
   public insertRaceEntry(raceId: number, data: EntryImportData): { id: number; updated: boolean } {
-    const horse = this.getHorseByName(data.horseName);
+    // 馬を名前+血統で検索（同姓同名馬の区別）
+    const horse = data.sireName || data.mareName
+      ? this.getHorseByNameAndBloodline(data.horseName, data.sireName, data.mareName)
+      : this.getHorseByName(data.horseName);
     if (!horse) {
-      throw new Error(`Horse not found: ${data.horseName}`);
+      throw new Error(`Horse not found: ${data.horseName} (sire: ${data.sireName}, mare: ${data.mareName})`);
     }
     const jockeyId = this.getOrCreateJockey(data.jockeyName, data.assignedWeight);
 
-    // 既存チェック（レースID＋馬番で一致）
+    // 既存チェック（レースID＋馬IDで一致）- 同じレースに同じ馬は1回のみ
     const existing = this.db.prepare(`
-      SELECT id FROM race_entries WHERE race_id = ? AND horse_number = ?
-    `).get(raceId, data.horseNumber) as DBRaceEntry | undefined;
+      SELECT id FROM race_entries WHERE race_id = ? AND horse_id = ?
+    `).get(raceId, horse.id) as DBRaceEntry | undefined;
 
     if (existing) {
-      // 既存エントリを更新
+      // 既存エントリを更新（馬番も更新対象に含める）
       this.db.prepare(`
         UPDATE race_entries SET
           jockey_id = COALESCE(?, jockey_id),
           frame_number = COALESCE(?, frame_number),
+          horse_number = COALESCE(?, horse_number),
           assigned_weight = COALESCE(?, assigned_weight),
           win_odds = COALESCE(?, win_odds),
           popularity = COALESCE(?, popularity),
@@ -280,6 +309,7 @@ export class ArimaDatabase {
       `).run(
         jockeyId,
         data.frameNumber || null,
+        data.horseNumber || null,
         data.assignedWeight || null,
         data.winOdds || null,
         data.popularity || null,
@@ -687,6 +717,18 @@ export class ArimaDatabase {
       LEFT JOIN race_results rr ON rr.entry_id = e.id
       WHERE e.jockey_id = ? AND h.trainer_id = ?
     `).get(jockeyId, trainerId) as any;
+  }
+
+  // ============================================
+  // トランザクション
+  // ============================================
+
+  /**
+   * トランザクション内で処理を実行
+   * エラー時は自動ロールバック
+   */
+  public runInTransaction<T>(fn: () => T): T {
+    return this.db.transaction(fn)();
   }
 
   public close(): void {
