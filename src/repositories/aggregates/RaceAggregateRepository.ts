@@ -22,15 +22,25 @@ export class RaceAggregateRepository {
   /**
    * レースを登録（トランザクション）
    * 内部で会場を自動登録
+   * @param matchByName 前走データなどレース番号が不明な場合、レース名でマッチング
    */
-  insertRace(data: RaceImportData): RaceInsertResult {
+  insertRace(data: RaceImportData, matchByName: boolean = false): RaceInsertResult {
     return this.db.transaction(() => {
       const venueId = this.getOrCreateVenue(data.venue);
 
-      // 既存チェック（日付＋会場＋レース番号で一致）
-      const existing = this.db.prepare(`
-        SELECT id FROM races WHERE race_date = ? AND venue_id = ? AND race_number = ?
-      `).get(data.raceDate, venueId, data.raceNumber ?? 1) as { id: number } | undefined;
+      let existing: { id: number } | undefined;
+
+      if (matchByName) {
+        // 前走データ: レース名＋日付＋会場でマッチング
+        existing = this.db.prepare(`
+          SELECT id FROM races WHERE race_date = ? AND venue_id = ? AND race_name = ?
+        `).get(data.raceDate, venueId, data.raceName) as { id: number } | undefined;
+      } else {
+        // 通常: 日付＋会場＋レース番号でマッチング
+        existing = this.db.prepare(`
+          SELECT id FROM races WHERE race_date = ? AND venue_id = ? AND race_number = ?
+        `).get(data.raceDate, venueId, data.raceNumber ?? 1) as { id: number } | undefined;
+      }
 
       if (existing) {
         // 既存レースを更新

@@ -156,16 +156,17 @@ export class ImportData {
         const { distance, raceType } = this.parseDistanceString(prevRace.distance);
         const raceDate = this.parseJapaneseDate(prevRace.date);
 
+        // 前走データはレース番号が不明なため、レース名でマッチング
         const { id: prevRaceId } = this.raceAggregateRepo.insertRace({
           raceDate: raceDate,
           venue: prevRace.track,
-          raceNumber: 1,
+          // raceNumber は省略（前走データはレース番号不明）
           raceName: prevRace.raceName,
           raceType: raceType,
           distance: distance,
           trackCondition: this.parseTrackCondition(prevRace.trackCondition),
           totalHorses: prevRace.totalHorses
-        });
+        }, true);  // matchByName: true で既存レースをレース名でマッチング
 
         // 前走のエントリを登録
         const { id: entryId } = this.raceAggregateRepo.insertRaceEntry(prevRaceId, {
