@@ -184,12 +184,19 @@ export class Horse {
       // 着順による得点
       raceScore = getPositionScore(pos);
 
-      // 人気と着順の乖離による補正
+      // 人気と着順の乖離による補正（双方向）
       const popularityDiff = result.getPopularityDiff();
       if (popularityDiff > 0) {
+        // 期待以上の好走: ボーナス
         raceScore = Math.min(
           raceScore + popularityDiff * POPULARITY_DIFF_FACTOR,
           POPULARITY_DIFF_MAX
+        );
+      } else if (popularityDiff < 0) {
+        // 期待以下の凡走: ペナルティ（係数は半分）
+        raceScore = Math.max(
+          0,
+          raceScore + popularityDiff * (POPULARITY_DIFF_FACTOR * 0.5)
         );
       }
 
