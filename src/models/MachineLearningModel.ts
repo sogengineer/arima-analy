@@ -711,10 +711,20 @@ export class MachineLearningModel {
       if (this.rfModel) {
         try {
           const rfPred = this.rfModel.predict([featureVector]);
-          // 確率を推定（クラス予測を確率に変換）
-          rfProb = rfPred[0] === 1 ? 0.65 : 0.25;
+          // RFのクラス予測と特徴量スコアを組み合わせて確率を推定
+          // 特徴量の平均スコア（0-1正規化済み）を基準に調整
+          const avgFeatureScore = featureVector.reduce((a, b) => a + b, 0) / featureVector.length;
+          if (rfPred[0] === 1) {
+            // 複勝圏内予測: 基準確率0.5 + 特徴量スコアで調整（0.5-0.85）
+            rfProb = 0.5 + avgFeatureScore * 0.35;
+          } else {
+            // 圏外予測: 基準確率0.15 + 特徴量スコアで調整（0.15-0.45）
+            rfProb = 0.15 + avgFeatureScore * 0.30;
+          }
         } catch {
-          // フォールバック
+          // フォールバック: 特徴量スコアのみで推定
+          const avgFeatureScore = featureVector.reduce((a, b) => a + b, 0) / featureVector.length;
+          rfProb = avgFeatureScore * 0.5 + 0.2;
         }
       }
 

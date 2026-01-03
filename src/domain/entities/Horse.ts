@@ -213,7 +213,8 @@ export class Horse {
   calculateVenueAptitudeScore(venue: string): number {
     const venueStats = this.data.courseStats.find(s => s.venue_name === venue);
 
-    if (!venueStats || venueStats.runs === 0) return 0;
+    // 会場での出走実績がない場合は中間値を返す（初出走馬対応）
+    if (!venueStats || venueStats.runs === 0) return 50;
 
     const winRate = venueStats.wins / venueStats.runs;
     const placeRate = (venueStats.wins + (venueStats.places ?? 0)) / venueStats.runs;

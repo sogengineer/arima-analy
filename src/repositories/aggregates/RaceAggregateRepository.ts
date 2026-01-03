@@ -280,15 +280,17 @@ export class RaceAggregateRepository {
   }
 
   private getOrCreateJockey(name: string, weight?: number): number {
-    if (!name) return 0;
+    // 騎手名が不明な場合は「未定」として登録（外部キー制約対応）
+    const jockeyName = name?.trim() || '未定';
+
     const existing = this.db.prepare(
       'SELECT id FROM jockeys WHERE name = ?'
-    ).get(name) as { id: number } | undefined;
+    ).get(jockeyName) as { id: number } | undefined;
     if (existing) return existing.id;
 
     const result = this.db.prepare(
       'INSERT INTO jockeys (name, default_weight) VALUES (?, ?)'
-    ).run(name, weight ?? null);
+    ).run(jockeyName, weight ?? null);
     return result.lastInsertRowid as number;
   }
 

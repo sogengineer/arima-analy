@@ -132,7 +132,10 @@ export class Trainer {
    * @returns スコア（0-100）
    */
   private calculateG1WinScore(): number {
-    if (this.data.g1Runs === 0) return 0;
+    // G1未経験の場合は重賞成績の50%を使用
+    if (this.data.g1Runs === 0) {
+      return this.calculateGradeWinScore() * 0.5;
+    }
 
     const winRate = this.data.g1Wins / this.data.g1Runs;
     let score = winRate * 100;
@@ -152,7 +155,8 @@ export class Trainer {
    * @returns スコア（0-100）
    */
   private calculateGradeWinScore(): number {
-    if (this.data.gradeRuns === 0) return 0;
+    // 重賞未経験の場合は中間値を返す
+    if (this.data.gradeRuns === 0) return 30;
 
     const winRate = this.data.gradeWins / this.data.gradeRuns;
     let score = winRate * 100;

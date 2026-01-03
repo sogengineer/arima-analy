@@ -123,7 +123,11 @@ export class Jockey {
    */
   private calculateVenueWinScore(venue: string): number {
     const stats = this.data.venueStats.get(venue);
-    if (!stats || stats.total_runs === 0) return 0;
+
+    // 会場未経験の場合は全体成績の75%を使用
+    if (!stats || stats.total_runs === 0) {
+      return this.calculateOverallWinScore() * 0.75;
+    }
 
     const winRate = stats.wins / stats.total_runs;
     let score = winRate * 100;
@@ -148,7 +152,11 @@ export class Jockey {
    */
   private calculateVenueG1Score(venue: string): number {
     const stats = this.data.venueStats.get(venue);
-    if (!stats || stats.venue_g1_runs === 0) return 0;
+
+    // 会場G1未経験の場合は全体成績の50%を使用（G1経験は希少なため低めに設定）
+    if (!stats || stats.venue_g1_runs === 0) {
+      return this.calculateOverallWinScore() * 0.5;
+    }
 
     const g1WinRate = stats.venue_g1_wins / stats.venue_g1_runs;
     let score = g1WinRate * 100;
