@@ -5,6 +5,7 @@ import { ScoreAggregateRepository } from '../repositories/aggregates/ScoreAggreg
 import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository.js';
 import { StatsQueryRepository } from '../repositories/queries/StatsQueryRepository.js';
 import { Backtest } from './Backtest.js';
+import { MachineLearningModel } from '../models/MachineLearningModel.js';
 import { readFileSync } from 'node:fs';
 import { ExtractedRaceData, HorseData } from '../types/HorseData.js';
 
@@ -123,8 +124,9 @@ export class ImportData {
       console.log(`🐎 馬: 新規${result.horseInsertCount}頭, 更新${result.horseUpdateCount}頭`);
       console.log(`📋 出馬表: ${result.entryCount}件`);
 
-      // バックテスト自動実行
+      // バックテスト＋重み最適化を自動実行
       this.runAutoBacktest();
+      this.runAutoOptimizeWeights();
 
     } catch (error) {
       console.error('❌ 抽出JSONからのインポートに失敗:', error);
@@ -157,6 +159,36 @@ export class ImportData {
     } catch (error) {
       // バックテストのエラーはインポート全体を失敗させない
       console.warn('⚠️  バックテスト自動実行をスキップしました');
+    }
+  }
+
+  /**
+   * インポート後の自動重み最適化
+   * 改善がある場合のみ結果を表示
+   */
+  private runAutoOptimizeWeights(): void {
+    try {
+      const db = this.connection.getConnection();
+      const ml = new MachineLearningModel(db);
+      const result = ml.runQuickOptimization();
+
+      if (result && result.dataCount >= 20) {
+        console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('🔧 重み最適化チェック');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log(`  学習データ:   ${result.dataCount}件`);
+
+        if (result.improvement > 0) {
+          console.log(`  予測改善:     +${(result.improvement * 100).toFixed(1)}%`);
+          console.log('');
+          console.log('💡 `yarn start optimize-weights --output` で詳細確認');
+        } else {
+          console.log('  予測改善:     なし（現行重みが最適）');
+        }
+      }
+    } catch (error) {
+      // 最適化のエラーはインポート全体を失敗させない
+      console.warn('⚠️  重み最適化チェックをスキップしました');
     }
   }
 

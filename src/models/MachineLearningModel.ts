@@ -53,9 +53,10 @@ export interface ModelStats {
 }
 
 export class MachineLearningModel {
-  private readonly connection: DatabaseConnection;
+  private readonly connection: DatabaseConnection | null;
   private readonly raceRepo: RaceQueryRepository;
   private readonly orchestrator: ScoringOrchestrator;
+  private readonly ownsConnection: boolean;
   private logisticWeights: number[] | null = null;
   private rfModel: RandomForestClassifier | null = null;
   private trained = false;
@@ -79,11 +80,19 @@ export class MachineLearningModel {
 
   private modelStats: ModelStats | null = null;
 
-  constructor() {
-    this.connection = new DatabaseConnection();
-    const db = this.connection.getConnection();
-    this.raceRepo = new RaceQueryRepository(db);
-    this.orchestrator = new ScoringOrchestrator(db);
+  constructor(externalDb?: ReturnType<DatabaseConnection['getConnection']>) {
+    if (externalDb) {
+      this.connection = null;
+      this.raceRepo = new RaceQueryRepository(externalDb);
+      this.orchestrator = new ScoringOrchestrator(externalDb);
+      this.ownsConnection = false;
+    } else {
+      this.connection = new DatabaseConnection();
+      const db = this.connection.getConnection();
+      this.raceRepo = new RaceQueryRepository(db);
+      this.orchestrator = new ScoringOrchestrator(db);
+      this.ownsConnection = true;
+    }
   }
 
   /**
@@ -827,7 +836,44 @@ export class MachineLearningModel {
     return this.modelStats;
   }
 
+  /**
+   * 簡易重み最適化（インポート後の自動実行用）
+   *
+   * @returns 訓練データ数と改善率（改善がない/データ不足の場合はnull）
+   */
+  runQuickOptimization(): { dataCount: number; improvement: number } | null {
+    try {
+      // 訓練データ準備
+      const { features, labels } = this.prepareTrainingDataForRegression();
+
+      if (features.length < 20) {
+        return null; // データ不足
+      }
+
+      // リッジ回帰で重みを学習
+      const lambda = 0.1;
+      const optimizedWeights = this.ridgeRegression(features, labels, lambda);
+
+      // 重みを正規化
+      const sum = optimizedWeights.reduce((a, b) => a + Math.abs(b), 0);
+      const normalizedWeights = optimizedWeights.map(w => Math.max(0, w) / sum);
+
+      // 改善度を計算
+      const currentWeights = this.getCurrentWeights();
+      const improvement = this.evaluateWeightImprovement(features, labels, currentWeights, normalizedWeights);
+
+      return {
+        dataCount: features.length,
+        improvement
+      };
+    } catch {
+      return null;
+    }
+  }
+
   close(): void {
-    this.connection.close();
+    if (this.ownsConnection && this.connection) {
+      this.connection.close();
+    }
   }
 }
