@@ -1,10 +1,13 @@
-import { ArimaDatabase } from '../database/Database';
+import { DatabaseConnection } from '../database/DatabaseConnection';
+import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
 
 export class AnalyzePerformance {
-  private readonly db: ArimaDatabase;
+  private readonly connection: DatabaseConnection;
+  private readonly horseRepo: HorseQueryRepository;
 
   constructor() {
-    this.db = new ArimaDatabase();
+    this.connection = new DatabaseConnection();
+    this.horseRepo = new HorseQueryRepository(this.connection.getConnection());
   }
 
   async execute(horseName?: string): Promise<void> {
@@ -14,7 +17,7 @@ export class AnalyzePerformance {
       let horses: { id: number; name: string }[];
 
       if (horseName) {
-        const horse = this.db.getHorseByName(horseName);
+        const horse = this.horseRepo.getHorseByName(horseName);
         if (!horse) {
           console.log(`❌ 馬 "${horseName}" が見つかりません`);
           console.log('\n📥 まず馬を登録してください:');
@@ -23,7 +26,7 @@ export class AnalyzePerformance {
         }
         horses = [horse];
       } else {
-        horses = this.db.getAllHorses();
+        horses = this.horseRepo.getAllHorses();
       }
 
       if (horses.length === 0) {
@@ -40,7 +43,7 @@ export class AnalyzePerformance {
 
       for (const horse of horses) {
         try {
-          const raceResults = this.db.getHorseRaceResults(horse.id);
+          const raceResults = this.horseRepo.getHorseRaceResults(horse.id);
 
           if (raceResults.length === 0) {
             console.log(`🐎 ${horse.name}: レース結果なし`);
@@ -58,7 +61,7 @@ export class AnalyzePerformance {
             const date = result.race_date;
             const raceName = result.race_name || 'レース名不明';
             const position = result.finish_position ?? '-';
-            const venue = result.venue || '';
+            const venue = result.venue_name || '';
             const distance = result.distance || '';
 
             console.log(`     ${index + 1}. ${date} ${raceName} ${position}着 ${venue}${distance}m`);
@@ -79,7 +82,7 @@ export class AnalyzePerformance {
           }
 
           // 馬場適性
-          const trackPerf = this.db.getTrackPerformance(horse.id);
+          const trackPerf = this.horseRepo.getHorseTrackStats(horse.id);
 
           if (trackPerf.length > 0) {
             console.log('   馬場適性:');
@@ -106,7 +109,7 @@ export class AnalyzePerformance {
     } catch (error) {
       console.error('❌ 戦績分析に失敗:', error);
     } finally {
-      this.db.close();
+      this.connection.close();
     }
   }
 }

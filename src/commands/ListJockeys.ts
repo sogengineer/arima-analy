@@ -1,17 +1,20 @@
-import { ArimaDatabase } from '../database/Database';
+import { DatabaseConnection } from '../database/DatabaseConnection';
+import { JockeyQueryRepository } from '../repositories/queries/JockeyQueryRepository';
 
 export class ListJockeys {
-  private readonly db: ArimaDatabase;
+  private readonly connection: DatabaseConnection;
+  private readonly jockeyRepo: JockeyQueryRepository;
 
   constructor() {
-    this.db = new ArimaDatabase();
+    this.connection = new DatabaseConnection();
+    this.jockeyRepo = new JockeyQueryRepository(this.connection.getConnection());
   }
 
   async execute(): Promise<void> {
     try {
       console.log('🏇 登録済み騎手一覧:');
 
-      const jockeys = this.db.getAllJockeys();
+      const jockeys = this.jockeyRepo.getAllJockeys();
 
       if (jockeys.length === 0) {
         console.log('\n❗ まだ騎手が登録されていません。');
@@ -35,7 +38,7 @@ export class ListJockeys {
     } catch (error) {
       console.error('❌ 騎手一覧の取得に失敗:', error);
     } finally {
-      this.db.close();
+      this.connection.close();
     }
   }
 }

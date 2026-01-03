@@ -1,17 +1,20 @@
-import { ArimaDatabase } from '../database/Database';
+import { DatabaseConnection } from '../database/DatabaseConnection';
+import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
 
 export class AnalyzeCourse {
-  private readonly db: ArimaDatabase;
+  private readonly connection: DatabaseConnection;
+  private readonly horseRepo: HorseQueryRepository;
 
   constructor() {
-    this.db = new ArimaDatabase();
+    this.connection = new DatabaseConnection();
+    this.horseRepo = new HorseQueryRepository(this.connection.getConnection());
   }
 
   async execute(): Promise<void> {
     try {
       console.log('🏇 中山2500mコース適性分析を実行中...');
 
-      const horses = this.db.getAllHorsesWithBloodline();
+      const horses = this.horseRepo.getAllHorsesWithDetails();
 
       if (horses.length === 0) {
         console.log('分析対象の馬がいません');
@@ -30,8 +33,8 @@ export class AnalyzeCourse {
         console.log(`🐎 ${horse.name} のコース適性分析:`);
 
         // 馬場適性データ取得
-        const courseStats = this.db.getHorseCourseStats(horse.id);
-        const trackStats = this.db.getHorseTrackStats(horse.id);
+        const courseStats = this.horseRepo.getHorseCourseStats(horse.id);
+        const trackStats = this.horseRepo.getHorseTrackStats(horse.id);
 
         // 中山コースの実績
         const nakayamaStats = courseStats.find((s: any) => s.venue_name === '中山');
@@ -67,7 +70,7 @@ export class AnalyzeCourse {
     } catch (error) {
       console.error('❌ コース適性分析に失敗:', error);
     } finally {
-      this.db.close();
+      this.connection.close();
     }
   }
 

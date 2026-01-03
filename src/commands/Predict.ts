@@ -1,4 +1,5 @@
-import { ArimaDatabase } from '../database/Database';
+import { DatabaseConnection } from '../database/DatabaseConnection';
+import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
 
 interface PredictionResult {
   horseName: string;
@@ -8,17 +9,19 @@ interface PredictionResult {
 }
 
 export class Predict {
-  private readonly db: ArimaDatabase;
+  private readonly connection: DatabaseConnection;
+  private readonly horseRepo: HorseQueryRepository;
 
   constructor() {
-    this.db = new ArimaDatabase();
+    this.connection = new DatabaseConnection();
+    this.horseRepo = new HorseQueryRepository(this.connection.getConnection());
   }
 
   async execute(): Promise<void> {
     try {
       console.log('🤖 統計ベースで連帯・3着内確率を予測中...');
 
-      const horses = this.db.getAllHorsesWithBloodline();
+      const horses = this.horseRepo.getAllHorsesWithDetails();
 
       if (horses.length === 0) {
         console.log('予測対象の馬がいません');
@@ -50,12 +53,12 @@ export class Predict {
     } catch (error) {
       console.error('❌ 予測に失敗:', error);
     } finally {
-      this.db.close();
+      this.connection.close();
     }
   }
 
   private calculateProbabilities(horseId: number, horseName: string): PredictionResult {
-    const results = this.db.getHorseRaceResults(horseId);
+    const results = this.horseRepo.getHorseRaceResults(horseId);
 
     if (results.length === 0) {
       return {

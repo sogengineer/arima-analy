@@ -1,17 +1,20 @@
-import { ArimaDatabase } from '../database/Database';
+import { DatabaseConnection } from '../database/DatabaseConnection';
+import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
 
 export class AnalyzeTrack {
-  private readonly db: ArimaDatabase;
+  private readonly connection: DatabaseConnection;
+  private readonly horseRepo: HorseQueryRepository;
 
   constructor() {
-    this.db = new ArimaDatabase();
+    this.connection = new DatabaseConnection();
+    this.horseRepo = new HorseQueryRepository(this.connection.getConnection());
   }
 
   async execute(): Promise<void> {
     try {
       console.log('🏁 馬場状態別成績分析を実行中...');
 
-      const horses = this.db.getAllHorsesWithBloodline();
+      const horses = this.horseRepo.getAllHorsesWithDetails();
 
       if (horses.length === 0) {
         console.log('分析対象の馬がいません');
@@ -36,7 +39,7 @@ export class AnalyzeTrack {
         console.log(`🐎 ${horse.name} の馬場適性分析:`);
 
         // 馬場適性データ取得
-        const trackStats = this.db.getHorseTrackStats(horse.id);
+        const trackStats = this.horseRepo.getHorseTrackStats(horse.id);
 
         for (const condition of trackConditions) {
           const stats = trackStats.find((s: any) => s.track_condition === condition);
@@ -67,7 +70,7 @@ export class AnalyzeTrack {
     } catch (error) {
       console.error('❌ 馬場適性分析に失敗:', error);
     } finally {
-      this.db.close();
+      this.connection.close();
     }
   }
 

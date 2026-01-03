@@ -1,4 +1,7 @@
-import { ArimaDatabase } from '../database/Database';
+import { DatabaseConnection } from '../database/DatabaseConnection';
+import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
+import { RaceQueryRepository } from '../repositories/queries/RaceQueryRepository';
+import { JockeyQueryRepository } from '../repositories/queries/JockeyQueryRepository';
 import { RandomForestClassifier } from 'ml-random-forest';
 import { Matrix } from 'ml-matrix';
 import * as ss from 'simple-statistics';
@@ -58,7 +61,10 @@ export interface ModelStats {
 }
 
 export class MachineLearningModel {
-  private readonly db: ArimaDatabase;
+  private readonly connection: DatabaseConnection;
+  private readonly horseRepo: HorseQueryRepository;
+  private readonly raceRepo: RaceQueryRepository;
+  private readonly jockeyRepo: JockeyQueryRepository;
   private logisticWeights: number[] | null = null;
   private rfModel: RandomForestClassifier | null = null;
   private trained = false;
@@ -77,13 +83,17 @@ export class MachineLearningModel {
   private modelStats: ModelStats | null = null;
 
   constructor() {
-    this.db = new ArimaDatabase();
+    this.connection = new DatabaseConnection();
+    const db = this.connection.getConnection();
+    this.horseRepo = new HorseQueryRepository(db);
+    this.raceRepo = new RaceQueryRepository(db);
+    this.jockeyRepo = new JockeyQueryRepository(db);
   }
 
   // 特徴量抽出
   extractFeatures(horseId: number, raceId?: number): MLFeatures {
-    const horse = this.db.getHorseById(horseId);
-    const results = this.db.getHorseRaceResults(horseId);
+    const horse = this.horseRepo.getHorseById(horseId);
+    const results = this.horseRepo.getHorseRaceResults(horseId);
     const validResults = results.filter(r => r.finish_position != null);
 
     // 過去3走の偏差値計算
@@ -153,10 +163,9 @@ export class MachineLearningModel {
     if (!jockeyId) return 0.05; // デフォルト5%
 
     try {
-      const jockeyStats = this.db.getJockeyStats(jockeyId);
-      if (jockeyStats && jockeyStats.nakayama_g1_wins !== undefined) {
-        const totalG1 = jockeyStats.nakayama_g1_runs || 1;
-        return jockeyStats.nakayama_g1_wins / totalG1;
+      const jockeyStats = this.jockeyRepo.getJockeyVenueStats(jockeyId, '中山');
+      if (jockeyStats && jockeyStats.venue_g1_runs > 0) {
+        return jockeyStats.venue_g1_wins / jockeyStats.venue_g1_runs;
       }
     } catch {
       // データがない場合
@@ -171,7 +180,7 @@ export class MachineLearningModel {
     const horseIds: number[] = [];
 
     // 過去のレース結果を取得
-    const allResults = this.db.getAllRaceResults();
+    const allResults = this.raceRepo.getAllRaceResults();
 
     for (const result of allResults) {
       if (result.finish_position == null) continue;
@@ -460,7 +469,7 @@ export class MachineLearningModel {
       await this.trainModels();
     }
 
-    const entries = this.db.getRaceEntries(raceId);
+    const entries = this.raceRepo.getRaceEntries(raceId);
     const predictions: PredictionResult[] = [];
 
     for (const entry of entries) {
@@ -580,6 +589,6 @@ export class MachineLearningModel {
   }
 
   close(): void {
-    this.db.close();
+    this.connection.close();
   }
 }

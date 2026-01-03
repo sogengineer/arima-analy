@@ -1,17 +1,20 @@
-import { ArimaDatabase } from '../database/Database';
+import { DatabaseConnection } from '../database/DatabaseConnection';
+import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
 
 export class ListHorses {
-  private readonly db: ArimaDatabase;
+  private readonly connection: DatabaseConnection;
+  private readonly horseRepo: HorseQueryRepository;
 
   constructor() {
-    this.db = new ArimaDatabase();
+    this.connection = new DatabaseConnection();
+    this.horseRepo = new HorseQueryRepository(this.connection.getConnection());
   }
 
   async execute(): Promise<void> {
     try {
       console.log('🐎 登録済み出走馬一覧:');
 
-      const horses = this.db.getAllHorsesWithBloodline();
+      const horses = this.horseRepo.getAllHorsesWithDetails();
 
       if (horses.length === 0) {
         console.log('\n❗ まだ出走馬が登録されていません。');
@@ -41,7 +44,7 @@ export class ListHorses {
     } catch (error) {
       console.error('❌ 馬一覧の取得に失敗:', error);
     } finally {
-      this.db.close();
+      this.connection.close();
     }
   }
 }
