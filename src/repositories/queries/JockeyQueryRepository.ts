@@ -15,8 +15,12 @@ export class JockeyQueryRepository {
 
   /**
    * 騎手の指定コース成績を取得（G1成績も含む）
+   *
+   * @param jockeyId - 騎手ID
+   * @param venueName - 会場名（例: '中山', '東京'）
+   * @returns 会場成績、見つからない場合は null
    */
-  getJockeyVenueStats(jockeyId: number, venueName: string = '中山'): JockeyVenueStats | null {
+  getJockeyVenueStats(jockeyId: number, venueName: string): JockeyVenueStats | null {
     // 基本成績
     const stats = this.db.prepare(`
       SELECT

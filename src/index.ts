@@ -53,10 +53,11 @@ program
 
 program
   .command('course-analysis')
-  .description('中山2500m適性分析')
-  .action(async () => {
+  .description('会場別コース適性分析（省略時は全会場）')
+  .argument('[venue]', '会場名（例: 中山, 東京, 阪神）')
+  .action(async (venue?: string) => {
     const command = new AnalyzeCourse();
-    await command.execute();
+    await command.execute(venue);
   });
 
 program

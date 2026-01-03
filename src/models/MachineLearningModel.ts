@@ -14,10 +14,10 @@ export interface MLFeatures {
   lastRacePosition: number;
   // 前走タイム差（勝ち馬との差、秒）
   lastRaceTimeDiff: number;
-  // 中山での複勝率
-  nakayamaPlaceRate: number;
-  // 騎手の中山G1勝率
-  jockeyNakayamaG1WinRate: number;
+  // 会場別複勝率
+  venuePlaceRate: number;
+  // 騎手の会場別G1勝率
+  jockeyVenueG1WinRate: number;
   // 馬齢
   age: number;
   // 性別（牡=1, 牝=0, 騸=0.5）
@@ -72,8 +72,8 @@ export class MachineLearningModel {
     '過去3走偏差値',
     '前走着順',
     '前走タイム差',
-    '中山複勝率',
-    '騎手中山G1勝率',
+    '会場複勝率',
+    '騎手会場G1勝率',
     '馬齢',
     '性別',
     '出走回数',
@@ -90,11 +90,26 @@ export class MachineLearningModel {
     this.jockeyRepo = new JockeyQueryRepository(db);
   }
 
+  // 対象会場（レースから取得、デフォルトは全会場）
+  private targetVenue: string | null = null;
+
+  /**
+   * 対象会場を設定
+   *
+   * @param venue - 会場名（例: '中山', '東京'）
+   */
+  setTargetVenue(venue: string): void {
+    this.targetVenue = venue;
+  }
+
   // 特徴量抽出
   extractFeatures(horseId: number, raceId?: number): MLFeatures {
     const horse = this.horseRepo.getHorseById(horseId);
     const results = this.horseRepo.getHorseRaceResults(horseId);
     const validResults = results.filter(r => r.finish_position != null);
+
+    // 対象会場の決定（設定済みなら使用、なければ前走会場）
+    const venue = this.targetVenue ?? validResults[0]?.venue_name ?? null;
 
     // 過去3走の偏差値計算
     const last3 = validResults.slice(0, 3);
@@ -106,17 +121,17 @@ export class MachineLearningModel {
     const lastRacePosition = lastRace?.finish_position ?? 10;
     const lastRaceTimeDiff = lastRace?.time_diff_seconds ?? 2.0;
 
-    // 中山での複勝率
-    const nakayamaResults = validResults.filter(r =>
-      r.venue_name === '中山' || r.race_name?.includes('中山')
-    );
-    const nakayamaPlaces = nakayamaResults.filter(r => (r.finish_position ?? 99) <= 3).length;
-    const nakayamaPlaceRate = nakayamaResults.length > 0
-      ? nakayamaPlaces / nakayamaResults.length
+    // 会場別複勝率
+    const venueResults = venue
+      ? validResults.filter(r => r.venue_name === venue || r.race_name?.includes(venue))
+      : validResults;
+    const venuePlaces = venueResults.filter(r => (r.finish_position ?? 99) <= 3).length;
+    const venuePlaceRate = venueResults.length > 0
+      ? venuePlaces / venueResults.length
       : 0.3; // デフォルト
 
-    // 騎手の中山G1勝率（簡易版：データがあれば計算）
-    const jockeyNakayamaG1WinRate = this.getJockeyNakayamaG1WinRate(lastRace?.jockey_id);
+    // 騎手の会場別G1勝率
+    const jockeyVenueG1WinRate = this.getJockeyVenueG1WinRate(lastRace?.jockey_id, venue);
 
     // 馬齢・性別（birth_yearから計算）
     const currentYear = new Date().getFullYear();
@@ -135,8 +150,8 @@ export class MachineLearningModel {
       last3RacesDeviation,
       lastRacePosition,
       lastRaceTimeDiff,
-      nakayamaPlaceRate,
-      jockeyNakayamaG1WinRate,
+      venuePlaceRate,
+      jockeyVenueG1WinRate,
       age,
       sexNumeric,
       totalRuns,
@@ -158,12 +173,12 @@ export class MachineLearningModel {
     return Math.max(20, Math.min(80, deviation));
   }
 
-  // 騎手の中山G1勝率取得
-  private getJockeyNakayamaG1WinRate(jockeyId?: number): number {
-    if (!jockeyId) return 0.05; // デフォルト5%
+  // 騎手の会場別G1勝率取得
+  private getJockeyVenueG1WinRate(jockeyId?: number, venue?: string | null): number {
+    if (!jockeyId || !venue) return 0.05; // デフォルト5%
 
     try {
-      const jockeyStats = this.jockeyRepo.getJockeyVenueStats(jockeyId, '中山');
+      const jockeyStats = this.jockeyRepo.getJockeyVenueStats(jockeyId, venue);
       if (jockeyStats && jockeyStats.venue_g1_runs > 0) {
         return jockeyStats.venue_g1_wins / jockeyStats.venue_g1_runs;
       }
@@ -241,8 +256,8 @@ export class MachineLearningModel {
       feat.last3RacesDeviation / 100,    // 正規化
       feat.lastRacePosition / 18,         // 正規化
       Math.min(feat.lastRaceTimeDiff, 5) / 5, // 正規化
-      feat.nakayamaPlaceRate,
-      feat.jockeyNakayamaG1WinRate,
+      feat.venuePlaceRate,
+      feat.jockeyVenueG1WinRate,
       feat.age / 10,                      // 正規化
       feat.sexNumeric,
       Math.min(feat.totalRuns, 30) / 30,  // 正規化
@@ -578,7 +593,7 @@ export class MachineLearningModel {
           console.log(`       過去3走偏差値: ${ml.features.last3RacesDeviation.toFixed(1)}`);
         } else {
           console.log('    → MLが過大評価の可能性。直近の調子を確認。');
-          console.log(`       中山複勝率: ${(ml.features.nakayamaPlaceRate * 100).toFixed(1)}%`);
+          console.log(`       会場複勝率: ${(ml.features.venuePlaceRate * 100).toFixed(1)}%`);
         }
       }
     }

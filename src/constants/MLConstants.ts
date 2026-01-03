@@ -68,10 +68,10 @@ export const DEVIATION_PARAMS = {
 
 /** デフォルト確率値 */
 export const DEFAULT_PROBABILITIES = {
-  /** 中山複勝率のデフォルト */
-  nakayamaPlaceRate: 0.3,
-  /** 騎手G1勝率のデフォルト */
-  jockeyG1WinRate: 0.05,
+  /** 会場別複勝率のデフォルト */
+  venuePlaceRate: 0.3,
+  /** 騎手会場別G1勝率のデフォルト */
+  jockeyVenueG1WinRate: 0.05,
   /** データなし馬の勝率 */
   noDataWinProb: 0.05,
   /** データなし馬の連対率 */

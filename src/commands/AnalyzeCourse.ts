@@ -2,7 +2,8 @@
  * コース適性分析コマンド
  *
  * @remarks
- * 登録済みの馬の中山2500mコース適性を分析する。
+ * 登録済みの馬の指定会場コース適性を分析する。
+ * 会場を指定しない場合は全会場の成績を表示する。
  */
 
 import { DatabaseConnection } from '../database/DatabaseConnection';
@@ -20,10 +21,13 @@ export class AnalyzeCourse {
 
   /**
    * コース適性分析を実行
+   *
+   * @param venue - 会場名（例: '中山', '東京'）。省略時は全会場の成績を表示
    */
-  async execute(): Promise<void> {
+  async execute(venue?: string): Promise<void> {
     try {
-      console.log('🏇 中山2500mコース適性分析を実行中...');
+      const venueLabel = venue ?? '全会場';
+      console.log(`🏇 ${venueLabel}コース適性分析を実行中...`);
 
       const horses = this.horseRepo.getAllHorsesWithDetails();
 
@@ -34,7 +38,7 @@ export class AnalyzeCourse {
         return;
       }
 
-      console.log(`📊 ${horses.length}頭の中山コース適性を分析します\n`);
+      console.log(`📊 ${horses.length}頭の${venueLabel}コース適性を分析します\n`);
 
       // バッチ取得
       const horseIds = horses.filter(h => h.id != null).map(h => h.id!);
@@ -52,14 +56,31 @@ export class AnalyzeCourse {
         const courseStats = courseStatsMap.get(horse.id) ?? [];
         const trackStats = trackStatsMap.get(horse.id) ?? [];
 
-        // 中山コースの実績
-        const nakayamaStats = courseStats.find((s: CourseStats) => s.venue_name === '中山');
+        // 指定会場のコース実績
+        const venueStats = venue
+          ? courseStats.find((s: CourseStats) => s.venue_name === venue)
+          : undefined;
 
-        if (nakayamaStats && nakayamaStats.runs > 0) {
-          const winRate = nakayamaStats.runs > 0 ? (nakayamaStats.wins / nakayamaStats.runs * 100).toFixed(1) : '0';
-          console.log(`  中山コース: ${nakayamaStats.wins}勝/${nakayamaStats.runs}走 (勝率${winRate}%)`);
+        if (venue) {
+          // 特定会場指定時
+          if (venueStats && venueStats.runs > 0) {
+            const winRate = (venueStats.wins / venueStats.runs * 100).toFixed(1);
+            console.log(`  ${venue}コース: ${venueStats.wins}勝/${venueStats.runs}走 (勝率${winRate}%)`);
+          } else {
+            console.log(`  ${venue}コース: 実績なし`);
+          }
         } else {
-          console.log(`  中山コース: 実績なし`);
+          // 全会場表示
+          if (courseStats.length > 0) {
+            for (const cs of courseStats) {
+              if (cs.runs > 0) {
+                const winRate = (cs.wins / cs.runs * 100).toFixed(1);
+                console.log(`  ${cs.venue_name}コース: ${cs.wins}勝/${cs.runs}走 (勝率${winRate}%)`);
+              }
+            }
+          } else {
+            console.log(`  コース実績なし`);
+          }
         }
 
         // 芝の実績
@@ -70,18 +91,18 @@ export class AnalyzeCourse {
         }
 
         // 適性スコア算出
-        const aptitudeScore = this.calculateAptitudeScore(nakayamaStats, trackStats);
-        console.log(`  🎯 中山2500m適性スコア: ${aptitudeScore.toFixed(2)}点\n`);
+        const aptitudeScore = this.calculateAptitudeScore(venueStats, trackStats);
+        console.log(`  🎯 ${venueLabel}適性スコア: ${aptitudeScore.toFixed(2)}点\n`);
 
         analysisResults.push({
           name: horse.name,
           aptitudeScore,
-          stats: { nakayama: nakayamaStats, track: trackStats }
+          stats: { venue: venueStats, track: trackStats }
         });
       }
 
       // 適性ランキングを表示
-      this.displayAptitudeRanking(analysisResults);
+      this.displayAptitudeRanking(analysisResults, venueLabel);
 
     } catch (error) {
       console.error('❌ コース適性分析に失敗:', error);
@@ -93,16 +114,16 @@ export class AnalyzeCourse {
   /**
    * 適性スコアを計算
    *
-   * @param nakayamaStats - 中山コース成績
+   * @param venueStats - 会場コース成績
    * @param trackStats - 馬場別成績
    * @returns 適性スコア（0-100）
    */
-  private calculateAptitudeScore(nakayamaStats: CourseStats | undefined, trackStats: TrackStats[]): number {
+  private calculateAptitudeScore(venueStats: CourseStats | undefined, trackStats: TrackStats[]): number {
     let score = 50; // ベーススコア
 
-    // 中山コース実績
-    if (nakayamaStats && nakayamaStats.runs > 0) {
-      const winRate = nakayamaStats.wins / nakayamaStats.runs;
+    // 会場コース実績
+    if (venueStats && venueStats.runs > 0) {
+      const winRate = venueStats.wins / venueStats.runs;
       score += winRate * 30;
     }
 
@@ -120,9 +141,10 @@ export class AnalyzeCourse {
    * 適性ランキングを表示
    *
    * @param analysisResults - 分析結果の配列
+   * @param venueLabel - 会場ラベル（例: '中山', '全会場'）
    */
-  private displayAptitudeRanking(analysisResults: { name: string; aptitudeScore: number }[]): void {
-    console.log('🏆 中山2500m適性ランキング:');
+  private displayAptitudeRanking(analysisResults: { name: string; aptitudeScore: number }[], venueLabel: string): void {
+    console.log(`🏆 ${venueLabel}適性ランキング:`);
     console.log('='.repeat(60));
 
     const rankedResults = analysisResults
@@ -137,7 +159,7 @@ export class AnalyzeCourse {
 
     console.log('\n💡 適性スコア算出方法:');
     console.log('  - ベーススコア: 50点');
-    console.log('  - 中山コース実績: 最大30点');
+    console.log(`  - ${venueLabel}コース実績: 最大30点`);
     console.log('  - 芝実績: 最大20点');
   }
 }
