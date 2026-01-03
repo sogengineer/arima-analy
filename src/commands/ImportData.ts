@@ -59,6 +59,7 @@ export class ImportData {
         let horseInsertCount = 0;
         let horseUpdateCount = 0;
         let entryCount = 0;
+        const horseDataForPreviousRaces: { horse: HorseData; horseId: number }[] = [];
 
         for (const horse of jsonData.horses) {
           // 2-1. 馬を登録
@@ -99,12 +100,24 @@ export class ImportData {
           });
           entryCount++;
 
-          // 2-3. 前走データのインポート
-          this.importPreviousRaces(horse, horseId);
+          // 前走データは後で別トランザクションでインポート
+          horseDataForPreviousRaces.push({ horse, horseId });
         }
 
-        return { horseInsertCount, horseUpdateCount, entryCount };
+        return { horseInsertCount, horseUpdateCount, entryCount, horseDataForPreviousRaces };
       })();
+
+      // 3. 前走データのインポート（メイントランザクションとは独立）
+      // 前走データのエラーがメインのインポートに影響しないように分離
+      let previousRaceCount = 0;
+      for (const { horse, horseId } of result.horseDataForPreviousRaces) {
+        try {
+          this.importPreviousRaces(horse, horseId);
+          previousRaceCount++;
+        } catch (error) {
+          console.warn(`⚠️  ${horse.basicInfo.name} の前走データインポートをスキップ`);
+        }
+      }
 
       console.log('✅ 抽出JSONからのDBインポート完了');
       console.log(`🐎 馬: 新規${result.horseInsertCount}頭, 更新${result.horseUpdateCount}頭`);
