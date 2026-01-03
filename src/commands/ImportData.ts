@@ -4,6 +4,7 @@ import { RaceAggregateRepository } from '../repositories/aggregates/RaceAggregat
 import { ScoreAggregateRepository } from '../repositories/aggregates/ScoreAggregateRepository.js';
 import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository.js';
 import { StatsQueryRepository } from '../repositories/queries/StatsQueryRepository.js';
+import { Backtest } from './Backtest.js';
 import { readFileSync } from 'node:fs';
 import { ExtractedRaceData, HorseData, PreviousRaceResult } from '../types/HorseData.js';
 
@@ -109,10 +110,40 @@ export class ImportData {
       console.log(`🐎 馬: 新規${result.horseInsertCount}頭, 更新${result.horseUpdateCount}頭`);
       console.log(`📋 出馬表: ${result.entryCount}件`);
 
+      // バックテスト自動実行
+      this.runAutoBacktest();
+
     } catch (error) {
       console.error('❌ 抽出JSONからのインポートに失敗:', error);
     } finally {
       this.connection.close();
+    }
+  }
+
+  /**
+   * インポート後の自動バックテスト
+   * 直近の重賞レースで予測精度をサマリー表示
+   */
+  private runAutoBacktest(): void {
+    try {
+      const db = this.connection.getConnection();
+      const backtest = new Backtest(db);
+      const summary = backtest.runQuickSummary();
+
+      if (summary && summary.totalRaces > 0) {
+        console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('📊 バックテスト自動実行（直近重賞10レース）');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log(`  対象レース:   ${summary.totalRaces}件`);
+        console.log(`  1位的中率:    ${(summary.top1Accuracy * 100).toFixed(1)}%`);
+        console.log(`  上位3頭精度:  ${(summary.top3Accuracy * 100).toFixed(1)}%`);
+        console.log(`  順位相関:     ${summary.avgCorrelation.toFixed(3)}`);
+        console.log('');
+        console.log('💡 詳細は `yarn start backtest --verbose` で確認できます');
+      }
+    } catch (error) {
+      // バックテストのエラーはインポート全体を失敗させない
+      console.warn('⚠️  バックテスト自動実行をスキップしました');
     }
   }
 

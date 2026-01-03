@@ -132,4 +132,60 @@ export class RaceQueryRepository {
       WHERE rr.finish_position IS NOT NULL
     `).all() as { horse_id: number; race_id: number; finish_position: number }[];
   }
+
+  /**
+   * 結果があるレースを取得（バックテスト用）
+   *
+   * @param gradeOnly - 重賞のみに限定するか
+   */
+  getRacesWithResults(gradeOnly: boolean = false): RaceWithVenue[] {
+    const gradeCondition = gradeOnly
+      ? "AND (r.race_class LIKE '%G1%' OR r.race_class LIKE '%G2%' OR r.race_class LIKE '%G3%' OR r.race_name LIKE '%記念%')"
+      : '';
+
+    return this.db.prepare(`
+      SELECT DISTINCT r.*, v.name as venue_name
+      FROM races r
+      JOIN venues v ON r.venue_id = v.id
+      JOIN race_entries e ON e.race_id = r.id
+      JOIN race_results rr ON rr.entry_id = e.id
+      WHERE rr.finish_position IS NOT NULL
+      ${gradeCondition}
+      ORDER BY r.race_date DESC
+    `).all() as RaceWithVenue[];
+  }
+
+  /**
+   * レースの結果を取得
+   */
+  getRaceResults(raceId: number): {
+    horse_id: number;
+    horse_name: string;
+    horse_number: number;
+    finish_position: number | null;
+    finish_time?: string;
+    last_3f_time?: number;
+  }[] {
+    return this.db.prepare(`
+      SELECT
+        e.horse_id,
+        h.name as horse_name,
+        e.horse_number,
+        rr.finish_position,
+        rr.finish_time,
+        rr.last_3f_time
+      FROM race_entries e
+      JOIN horses h ON e.horse_id = h.id
+      LEFT JOIN race_results rr ON rr.entry_id = e.id
+      WHERE e.race_id = ?
+      ORDER BY COALESCE(rr.finish_position, 999)
+    `).all(raceId) as {
+      horse_id: number;
+      horse_name: string;
+      horse_number: number;
+      finish_position: number | null;
+      finish_time?: string;
+      last_3f_time?: number;
+    }[];
+  }
 }

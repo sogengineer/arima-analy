@@ -8,6 +8,7 @@ import { AnalyzeTrack } from './commands/AnalyzeTrack';
 import { AnalyzeCourse } from './commands/AnalyzeCourse';
 import { CalculateScore } from './commands/CalculateScore';
 import { Predict } from './commands/Predict';
+import { Backtest } from './commands/Backtest';
 import { ImportData } from './commands/ImportData';
 import { ExtractData } from './commands/ExtractData';
 
@@ -116,7 +117,7 @@ program
 
       const predictions = await ml.predict(raceId);
 
-      console.log('馬番 馬名              確率    LR確率  RF確率  過去3走  前走順');
+      console.log('馬番 馬名              確率    LR確率  RF確率  直近  会場');
       console.log('-'.repeat(70));
 
       predictions.forEach((p, i) => {
@@ -127,10 +128,10 @@ program
         const prob = (p.probability * 100).toFixed(1).padStart(5);
         const lr = (p.logisticProb * 100).toFixed(0).padStart(4);
         const rf = (p.rfProb * 100).toFixed(0).padStart(4);
-        const dev = p.features.last3RacesDeviation.toFixed(1).padStart(5);
-        const lastPos = p.features.lastRacePosition.toString().padStart(4);
+        const recent = p.features.recentPerformanceScore.toFixed(0).padStart(4);
+        const venue = p.features.venueAptitudeScore.toFixed(0).padStart(4);
 
-        console.log(`${medal}${num} ${name} ${prob}%  ${lr}%  ${rf}%  ${dev}  ${lastPos}着`);
+        console.log(`${medal}${num} ${name} ${prob}%  ${lr}%  ${rf}%  ${recent}点  ${venue}点`);
       });
 
       // クロスチェック
@@ -231,6 +232,44 @@ program
   .action(async (url: string, options: { format: 'detailed' | 'summary' | 'csv'; htmlOutput: string }) => {
     const command = new ExtractData();
     await command.fetchAndExtract(url, options.format, options.htmlOutput);
+  });
+
+program
+  .command('backtest')
+  .description('過去レースでスコアリングの予測精度を検証')
+  .option('-l, --limit <number>', '検証レース数の上限', parseInt)
+  .option('-a, --all', '全レースを対象（デフォルトは重賞のみ）')
+  .option('-v, --verbose', '各レースの詳細を表示')
+  .action(async (options: { limit?: number; all?: boolean; verbose?: boolean }) => {
+    const command = new Backtest();
+    await command.execute({
+      limit: options.limit,
+      gradeOnly: !options.all,
+      verbose: options.verbose
+    });
+  });
+
+program
+  .command('optimize-weights')
+  .description('過去データから最適な重みを学習')
+  .option('-l, --lambda <number>', '正則化パラメータ（デフォルト0.1）', parseFloat, 0.1)
+  .option('-o, --output', '最適化重みをコード形式で出力')
+  .action(async (options: { lambda: number; output?: boolean }) => {
+    const { MachineLearningModel } = await import('./models/MachineLearningModel.js');
+    const ml = new MachineLearningModel();
+
+    try {
+      const result = await ml.optimizeWeights(options.lambda);
+
+      if (options.output && result.improvement > 0) {
+        console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('📝 最適化重み（ScoringConstants.ts用）');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+        console.log(ml.getOptimizedWeightsAsConstants());
+      }
+    } finally {
+      ml.close();
+    }
   });
 
 program.parse(process.argv);
