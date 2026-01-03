@@ -41,8 +41,12 @@ import {
   G1_DEFAULT_SCORE,
   LAST_3F_PARAMS,
   VENUE_APTITUDE_WEIGHTS,
-  DISTANCE_APTITUDE_WEIGHTS
+  DISTANCE_APTITUDE_WEIGHTS,
+  getPostPositionScore,
+  TRACK_CONDITION_WEIGHTS,
+  TRACK_CONDITION_DEFAULT_SCORE
 } from '../../constants/ScoringConstants';
+import { Trainer } from './Trainer';
 import {
   DISTANCE_THRESHOLDS,
   calculateIntervalDays,
@@ -121,17 +125,26 @@ export class Horse {
   // ============================================================
 
   /**
-   * 総合スコアを計算
+   * 総合スコアを計算（10要素）
    *
    * @remarks
-   * 7要素のスコアを計算し、ScoreComponentsとして返す。
-   * 騎手スコア（15%）は Jockey エンティティに委譲。
+   * 10要素のスコアを計算し、ScoreComponentsとして返す。
+   * - 騎手スコア（8%）は Jockey エンティティに委譲
+   * - 調教師スコア（8%）は Trainer エンティティに委譲
+   * - 馬場適性（5%）と枠順効果（5%）は新規追加
    *
    * @param jockey - 騎手エンティティ（null可）
    * @param race - レースエンティティ
+   * @param trainer - 調教師エンティティ（null可）
+   * @param postPosition - 枠番（1-8、省略時は中間値）
    * @returns スコア構成要素
    */
-  calculateTotalScore(jockey: Jockey | null, race: Race): ScoreComponents {
+  calculateTotalScore(
+    jockey: Jockey | null,
+    race: Race,
+    trainer: Trainer | null = null,
+    postPosition?: number
+  ): ScoreComponents {
     const componentsData: ScoreComponentsData = {
       recentPerformanceScore: this.calculateRecentPerformanceScore(),
       venueAptitudeScore: this.calculateVenueAptitudeScore(race.venue),
@@ -139,7 +152,10 @@ export class Horse {
       last3FAbilityScore: this.calculateLast3FAbilityScore(),
       g1AchievementScore: this.calculateG1AchievementScore(),
       rotationAptitudeScore: this.calculateRotationAptitudeScore(),
-      jockeyScore: jockey?.calculateScore(race.venue) ?? 0
+      jockeyScore: jockey?.calculateScore(race.venue) ?? 0,
+      trackConditionScore: this.calculateTrackConditionAptitudeScore(race.trackCondition ?? '良'),
+      postPositionScore: postPosition ? getPostPositionScore(postPosition) : TRACK_CONDITION_DEFAULT_SCORE,
+      trainerScore: trainer?.calculateScore() ?? 0
     };
 
     return new ScoreComponents(componentsData);
@@ -344,6 +360,33 @@ export class Horse {
     if (totalIntervals === 0) return 0;
 
     const score = (goodPerformances / totalIntervals) * 100;
+    return Math.min(score, 100);
+  }
+
+  /**
+   * 馬場適性スコアを計算（5%）
+   *
+   * @remarks
+   * 指定馬場状態での勝率（60%）と連対率（40%）から算出。
+   * データがない場合は中間値（50点）を返す。
+   *
+   * @param trackCondition - 馬場状態（'良', '稍重', '重', '不良'）
+   * @returns スコア（0-100）
+   */
+  calculateTrackConditionAptitudeScore(trackCondition: string): number {
+    const stats = this.data.trackStats.find(
+      s => s.track_condition === trackCondition
+    );
+
+    if (!stats || stats.runs === 0) return TRACK_CONDITION_DEFAULT_SCORE;
+
+    const winRate = stats.wins / stats.runs;
+    const placeRate = (stats.wins + (stats.places ?? 0)) / stats.runs;
+
+    const score =
+      winRate * TRACK_CONDITION_WEIGHTS.winRate +
+      placeRate * TRACK_CONDITION_WEIGHTS.placeRate;
+
     return Math.min(score, 100);
   }
 

@@ -3,15 +3,28 @@
  * ScoreCommand.ts の値を正として採用
  */
 
-/** 総合スコアの7要素の重み配分 */
+/**
+ * 総合スコアの10要素の重み配分
+ *
+ * @remarks
+ * 専門家会議（2026/01/03）の議論を経て、7要素→10要素に拡張。
+ * - 騎手: 15%→8% (G1では差がつきにくい)
+ * - 上がり3F: 7%→10% (末脚勝負の重要性)
+ * - 馬場適性: 新規5% (道悪対応)
+ * - 枠順効果: 新規5% (中山2500m内枠有利)
+ * - 調教師: 新規8% (厩舎力の反映)
+ */
 export const SCORE_WEIGHTS = {
-  recentPerformance: 0.25,    // 直近成績 25%
-  venueAptitude: 0.18,        // コース適性 18%
-  distanceAptitude: 0.15,     // 距離適性 15%
-  last3FAbility: 0.07,        // 上がり3F能力 7%
+  recentPerformance: 0.22,    // 直近成績 22%
+  venueAptitude: 0.15,        // コース適性 15%
+  distanceAptitude: 0.12,     // 距離適性 12%
+  last3FAbility: 0.10,        // 上がり3F能力 10%
   g1Achievement: 0.05,        // G1実績 5%
-  rotationAptitude: 0.15,     // ローテ適性 15%
-  jockey: 0.15                // 騎手能力 15%
+  rotationAptitude: 0.10,     // ローテ適性 10%
+  jockey: 0.08,               // 騎手能力 8%
+  trackCondition: 0.05,       // 馬場適性 5%（新規）
+  postPosition: 0.05,         // 枠順効果 5%（新規）
+  trainer: 0.08               // 調教師 8%（新規）
 } as const;
 
 /** 直近5戦の重み（新しいレースほど高い） */
@@ -160,3 +173,55 @@ export const DISTANCE_APTITUDE_WEIGHTS = {
   placeRate: 40,
   exactDistanceBonus: 10   // 同距離実績のボーナス
 } as const;
+
+/**
+ * 枠順スコア（中山2500m用）
+ *
+ * @remarks
+ * 内枠有利のコース特性を反映。
+ * 過去20年のデータで内枠（1〜4枠）の勝率は外枠の約1.5倍。
+ */
+export const POST_POSITION_SCORES: Record<number | 'default', number> = {
+  1: 100,   // 1枠：最有利
+  2: 95,
+  3: 90,
+  4: 85,
+  5: 70,    // 5枠以降は不利
+  6: 65,
+  7: 60,
+  8: 55,    // 8枠：最不利
+  default: 50  // 枠不明の場合
+} as const;
+
+/** 枠順スコアを取得するヘルパー */
+export function getPostPositionScore(position: number): number {
+  if (position >= 1 && position <= 8) {
+    return POST_POSITION_SCORES[position as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8];
+  }
+  return POST_POSITION_SCORES.default;
+}
+
+/**
+ * 調教師スコアの内部構成重み
+ *
+ * @remarks
+ * G1勝率を重視しつつ、重賞全体の勝率も考慮。
+ */
+export const TRAINER_SCORE_WEIGHTS = {
+  g1WinRate: 0.60,      // G1勝率 60%
+  gradeWinRate: 0.40    // 重賞勝率 40%
+} as const;
+
+/**
+ * 馬場適性スコアの重み
+ *
+ * @remarks
+ * コース適性と同様の計算方法を採用。
+ */
+export const TRACK_CONDITION_WEIGHTS = {
+  winRate: 60,
+  placeRate: 40
+} as const;
+
+/** 馬場適性データなしの場合のデフォルトスコア */
+export const TRACK_CONDITION_DEFAULT_SCORE = 50;

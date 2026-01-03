@@ -109,8 +109,18 @@ export class ScoringOrchestrator {
         ? this.buildJockeyEntity(entry.jockey_id, race.venue, entry.trainer_id)
         : null;
 
-      // 計算はエンティティに委譲
-      const scores = horse.calculateTotalScore(jockey, race);
+      // TODO: Trainerエンティティの構築は将来実装
+      // const trainer = entry.trainer_id
+      //   ? this.buildTrainerEntity(entry.trainer_id)
+      //   : null;
+
+      // 計算はエンティティに委譲（枠番情報を追加）
+      const scores = horse.calculateTotalScore(
+        jockey,
+        race,
+        null,  // trainer（将来実装）
+        entry.horse_number  // 枠番
+      );
 
       results.push({
         horseId: entry.horse_id,
@@ -136,8 +146,13 @@ export class ScoringOrchestrator {
       ? this.buildJockeyEntity(entry.jockey_id, race.venue, entry.trainer_id)
       : null;
 
-    // 計算はエンティティに委譲
-    return horse.calculateTotalScore(jockey, race);
+    // 計算はエンティティに委譲（枠番情報を追加）
+    return horse.calculateTotalScore(
+      jockey,
+      race,
+      null,  // trainer（将来実装）
+      entry.horse_number  // 枠番
+    );
   }
 
   /**

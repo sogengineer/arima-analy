@@ -1,6 +1,9 @@
 /**
  * スコア・統計集約のリポジトリ
  * トランザクション単位でスコア＋統計を更新
+ *
+ * @remarks
+ * 専門家会議（2026/01/03）で合意した10要素構成に対応。
  */
 
 import type Database from 'better-sqlite3';
@@ -10,7 +13,7 @@ export class ScoreAggregateRepository {
   constructor(private readonly db: Database.Database) {}
 
   /**
-   * 馬スコアを更新
+   * 馬スコアを更新（10要素構成 + total_score）
    */
   updateHorseScore(
     horseId: number,
@@ -19,30 +22,40 @@ export class ScoreAggregateRepository {
   ): void {
     this.db.prepare(`
       INSERT INTO horse_scores (
-        horse_id, race_id, recent_performance_score, course_aptitude_score,
-        distance_aptitude_score, track_condition_score, last_3f_ability_score,
-        bloodline_score, jockey_score, rotation_score
+        horse_id, race_id,
+        recent_performance_score, course_aptitude_score, distance_aptitude_score,
+        last_3f_ability_score, g1_achievement_score, rotation_score,
+        track_condition_score, jockey_score, trainer_score, post_position_score,
+        total_score
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(horse_id, race_id) DO UPDATE SET
         recent_performance_score = COALESCE(?, recent_performance_score),
         course_aptitude_score = COALESCE(?, course_aptitude_score),
         distance_aptitude_score = COALESCE(?, distance_aptitude_score),
-        track_condition_score = COALESCE(?, track_condition_score),
         last_3f_ability_score = COALESCE(?, last_3f_ability_score),
-        bloodline_score = COALESCE(?, bloodline_score),
+        g1_achievement_score = COALESCE(?, g1_achievement_score),
+        rotation_score = COALESCE(?, rotation_score),
+        track_condition_score = COALESCE(?, track_condition_score),
         jockey_score = COALESCE(?, jockey_score),
-        rotation_score = COALESCE(?, rotation_score)
+        trainer_score = COALESCE(?, trainer_score),
+        post_position_score = COALESCE(?, post_position_score),
+        total_score = COALESCE(?, total_score)
     `).run(
       horseId, raceId,
       scores.recent_performance_score, scores.course_aptitude_score,
-      scores.distance_aptitude_score, scores.track_condition_score ?? null,
-      scores.last_3f_ability_score, scores.bloodline_score,
-      scores.jockey_score, scores.rotation_score,
+      scores.distance_aptitude_score, scores.last_3f_ability_score,
+      scores.g1_achievement_score, scores.rotation_score,
+      scores.track_condition_score, scores.jockey_score,
+      scores.trainer_score, scores.post_position_score,
+      scores.total_score,
+      // ON CONFLICT用の値
       scores.recent_performance_score, scores.course_aptitude_score,
-      scores.distance_aptitude_score, scores.track_condition_score ?? null,
-      scores.last_3f_ability_score, scores.bloodline_score,
-      scores.jockey_score, scores.rotation_score
+      scores.distance_aptitude_score, scores.last_3f_ability_score,
+      scores.g1_achievement_score, scores.rotation_score,
+      scores.track_condition_score, scores.jockey_score,
+      scores.trainer_score, scores.post_position_score,
+      scores.total_score
     );
   }
 

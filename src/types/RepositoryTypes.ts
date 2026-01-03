@@ -176,31 +176,59 @@ export interface BatchInsertResult {
   errors: string[];
 }
 
-/** スコア更新データ */
+/**
+ * スコア更新データ（10要素構成）
+ *
+ * @remarks
+ * 専門家会議（2026/01/03）で合意した新しい重み配分に対応。
+ * 7要素から10要素に拡張。
+ */
 export interface ScoreUpdateData {
-  recent_performance_score: number;
-  course_aptitude_score: number;
-  distance_aptitude_score: number;
-  track_condition_score?: number;
-  last_3f_ability_score: number;
-  bloodline_score: number;
-  rotation_score: number;
-  jockey_score: number;
+  // 馬の能力・実績（59%）
+  recent_performance_score: number;      // 直近成績
+  course_aptitude_score: number;         // コース適性
+  distance_aptitude_score: number;       // 距離適性
+  last_3f_ability_score: number;         // 上がり3F能力
+  // 実績・経験（5%）
+  g1_achievement_score: number;          // G1実績
+  // コンディション（15%）
+  rotation_score: number;                // ローテ適性
+  track_condition_score: number;         // 馬場適性
+  // 人的要因（16%）
+  jockey_score: number;                  // 騎手能力
+  trainer_score: number;                 // 調教師
+  // 枠順要因（5%）
+  post_position_score: number;           // 枠順効果
+  // 総合スコア（アプリケーション側で計算）
+  total_score: number;
 }
 
 // ============================================
 // ドメインエンティティ用の型
 // ============================================
 
-/** スコアコンポーネント（7要素） */
+/**
+ * スコアコンポーネント（10要素）
+ *
+ * @remarks
+ * 専門家会議（2026/01/03）で合意した新しい重み配分に対応。
+ */
 export interface ScoreComponents {
-  recentPerformanceScore: number;
-  venueAptitudeScore: number;
-  distanceAptitudeScore: number;
-  last3FAbilityScore: number;
-  g1AchievementScore: number;
-  rotationAptitudeScore: number;
-  jockeyScore: number;
+  // 馬の能力・実績（59%）
+  recentPerformanceScore: number;        // 直近成績 22%
+  venueAptitudeScore: number;            // コース適性 15%
+  distanceAptitudeScore: number;         // 距離適性 12%
+  last3FAbilityScore: number;            // 上がり3F能力 10%
+  // 実績・経験（5%）
+  g1AchievementScore: number;            // G1実績 5%
+  // コンディション（15%）
+  rotationAptitudeScore: number;         // ローテ適性 10%
+  trackConditionScore: number;           // 馬場適性 5%（新規）
+  // 人的要因（16%）
+  jockeyScore: number;                   // 騎手能力 8%
+  trainerScore: number;                  // 調教師 8%（新規）
+  // 枠順要因（5%）
+  postPositionScore: number;             // 枠順効果 5%（新規）
 }
 
 /** 馬スコア（総合スコア付き） */

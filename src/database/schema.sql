@@ -240,29 +240,29 @@ CREATE TABLE IF NOT EXISTS jockey_trainer_stats (
     UNIQUE(jockey_id, trainer_id)
 );
 
--- 馬スコア
+-- 馬スコア（10要素構成、専門家会議2026/01/03で合意）
+-- 重み配分は src/constants/ScoringConstants.ts で一元管理
 CREATE TABLE IF NOT EXISTS horse_scores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     horse_id INTEGER NOT NULL,
     race_id INTEGER,
-    recent_performance_score REAL DEFAULT 0,
-    course_aptitude_score REAL DEFAULT 0,
-    distance_aptitude_score REAL DEFAULT 0,
-    track_condition_score REAL DEFAULT 0,
-    last_3f_ability_score REAL DEFAULT 0,
-    bloodline_score REAL DEFAULT 0,
-    jockey_score REAL DEFAULT 0,
-    rotation_score REAL DEFAULT 0,
-    total_score REAL GENERATED ALWAYS AS (
-        (recent_performance_score * 0.20) +
-        (course_aptitude_score * 0.15) +
-        (distance_aptitude_score * 0.15) +
-        (track_condition_score * 0.10) +
-        (last_3f_ability_score * 0.15) +
-        (bloodline_score * 0.10) +
-        (jockey_score * 0.10) +
-        (rotation_score * 0.05)
-    ) STORED,
+    -- 馬の能力・実績（59%）
+    recent_performance_score REAL DEFAULT 0,      -- 直近成績
+    course_aptitude_score REAL DEFAULT 0,         -- コース適性
+    distance_aptitude_score REAL DEFAULT 0,       -- 距離適性
+    last_3f_ability_score REAL DEFAULT 0,         -- 上がり3F能力
+    -- 実績・経験（5%）
+    g1_achievement_score REAL DEFAULT 0,          -- G1実績
+    -- コンディション（15%）
+    rotation_score REAL DEFAULT 0,                -- ローテ適性
+    track_condition_score REAL DEFAULT 0,         -- 馬場適性
+    -- 人的要因（16%）
+    jockey_score REAL DEFAULT 0,                  -- 騎手能力
+    trainer_score REAL DEFAULT 0,                 -- 調教師
+    -- 枠順要因（5%）
+    post_position_score REAL DEFAULT 0,           -- 枠順効果
+    -- 総合スコア（アプリケーション側で計算して保存）
+    total_score REAL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (horse_id) REFERENCES horses(id),
     FOREIGN KEY (race_id) REFERENCES races(id),

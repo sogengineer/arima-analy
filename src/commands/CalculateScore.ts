@@ -120,15 +120,19 @@ export class CalculateScore {
           jockeyScore: components.jockeyScore
         });
 
-        // DBに保存
+        // DBに保存（10要素構成 + total_score）
         this.scoreRepo.updateHorseScore(result.horseId, race.id, {
           recent_performance_score: components.recentPerformanceScore,
           course_aptitude_score: components.venueAptitudeScore,
           distance_aptitude_score: components.distanceAptitudeScore,
           last_3f_ability_score: components.last3FAbilityScore,
-          bloodline_score: components.g1AchievementScore,
+          g1_achievement_score: components.g1AchievementScore,
           rotation_score: components.rotationAptitudeScore,
-          jockey_score: components.jockeyScore
+          track_condition_score: components.trackConditionScore,
+          jockey_score: components.jockeyScore,
+          trainer_score: components.trainerScore,
+          post_position_score: components.postPositionScore,
+          total_score: components.totalScore
         });
       }
 
