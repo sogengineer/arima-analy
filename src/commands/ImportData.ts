@@ -6,7 +6,7 @@ import { HorseQueryRepository } from '../repositories/queries/HorseQueryReposito
 import { StatsQueryRepository } from '../repositories/queries/StatsQueryRepository.js';
 import { Backtest } from './Backtest.js';
 import { readFileSync } from 'node:fs';
-import { ExtractedRaceData, HorseData, PreviousRaceResult } from '../types/HorseData.js';
+import { ExtractedRaceData, HorseData } from '../types/HorseData.js';
 
 export class ImportData {
   private readonly connection: DatabaseConnection;

@@ -1,9 +1,6 @@
 import { DatabaseConnection } from '../database/DatabaseConnection';
-import { ScoringOrchestrator, type HorseScoreResult } from '../domain/services/ScoringOrchestrator';
+import { ScoringOrchestrator } from '../domain/services/ScoringOrchestrator';
 import { ScoreAggregateRepository } from '../repositories/aggregates/ScoreAggregateRepository';
-import { SCORE_WEIGHTS, SCORE_RANGES } from '../constants/ScoringConstants';
-import type { ScoreComponents } from '../domain/valueObjects/ScoreComponents';
-import type { RaceWithVenue } from '../types/RepositoryTypes';
 
 interface HorseScore {
   horseId: number;
