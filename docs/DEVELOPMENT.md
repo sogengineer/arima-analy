@@ -62,7 +62,7 @@ arima/
 │   │   │   └── RaceResult.ts       # レース結果
 │   │   ├── valueObjects/
 │   │   │   ├── Score.ts            # スコア値オブジェクト
-│   │   │   └── ScoreComponents.ts  # 7要素スコア構成
+│   │   │   └── ScoreComponents.ts  # 10要素スコア構成
 │   │   └── services/
 │   │       └── ScoringOrchestrator.ts # スコアリングオーケストレーター
 │   ├── repositories/               # リポジトリ層
@@ -179,13 +179,13 @@ yarn fetch-and-extract https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde101
 | パッケージ | バージョン | 用途 |
 |-----------|-----------|------|
 | typescript | ^5.9.3 | TypeScriptコンパイラ |
-| @types/better-sqlite3 | ^7.6.13 | 型定義 |
-| @types/node | ^22.15.30 | 型定義 |
-| eslint | ^9.29.0 | 静的解析 |
-| @typescript-eslint/eslint-plugin | ^8.33.0 | ESLintプラグイン |
-| @typescript-eslint/parser | ^8.33.0 | ESLintパーサー |
-| tsx | ^4.20.3 | TypeScript実行ランタイム |
-| vitest | ^3.2.2 | テストフレームワーク |
+| @types/better-sqlite3 | ^7.6.8 | 型定義 |
+| @types/node | ^20.10.0 | 型定義 |
+| eslint | ^8.0.0 | 静的解析 |
+| @typescript-eslint/eslint-plugin | ^6.0.0 | ESLintプラグイン |
+| @typescript-eslint/parser | ^6.0.0 | ESLintパーサー |
+| tsx | ^4.7.0 | TypeScript実行ランタイム |
+| vitest | ^1.2.0 | テストフレームワーク |
 
 ---
 
@@ -275,15 +275,18 @@ interface MLFeatures {
   avgFinishPosition: number;
 }
 
-// スコア構成要素（7要素）
+// スコア構成要素（10要素）
 interface ScoreComponents {
-  recentPerformanceScore: number;   // 直近成績 25%
-  venueAptitudeScore: number;       // 会場適性 18%
-  distanceAptitudeScore: number;    // 距離適性 15%
-  last3FAbilityScore: number;       // 上がり3F 7%
+  recentPerformanceScore: number;   // 直近成績 22%
+  venueAptitudeScore: number;       // コース適性 15%
+  distanceAptitudeScore: number;    // 距離適性 12%
+  last3FAbilityScore: number;       // 上がり3F 10%
   g1AchievementScore: number;       // G1実績 5%
-  rotationAptitudeScore: number;    // ローテ 15%
-  jockeyScore: number;              // 騎手能力 15%
+  rotationAptitudeScore: number;    // ローテ 10%
+  jockeyScore: number;              // 騎手能力 8%
+  trackConditionScore: number;      // 馬場適性 5%
+  postPositionScore: number;        // 枠順効果 5%
+  trainerScore: number;             // 調教師 8%
 }
 ```
 

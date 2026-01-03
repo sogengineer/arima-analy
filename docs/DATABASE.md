@@ -86,7 +86,7 @@ CREATE TABLE sires (
 ```sql
 CREATE TABLE mares (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   sire_id INTEGER REFERENCES sires(id),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -149,7 +149,8 @@ CREATE TABLE breeders (
 CREATE TABLE jockeys (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE,
-  weight REAL,
+  default_weight REAL,
+  apprentice_status TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
@@ -158,7 +159,8 @@ CREATE TABLE jockeys (
 |--------|-----|------|
 | id | INTEGER | 主キー |
 | name | TEXT | 騎手名 |
-| weight | REAL | 体重 |
+| default_weight | REAL | 斤量 |
+| apprentice_status | TEXT | 見習い騎手ステータス |
 
 ---
 
@@ -178,9 +180,10 @@ CREATE TABLE horses (
   trainer_id INTEGER REFERENCES trainers(id),
   owner_id INTEGER REFERENCES owners(id),
   breeder_id INTEGER REFERENCES breeders(id),
-  jra_horse_id TEXT UNIQUE,
+  jra_horse_id TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(name, sire_id, mare_id)
 );
 ```
 
@@ -208,19 +211,19 @@ CREATE TABLE races (
   race_date DATE NOT NULL,
   venue_id INTEGER NOT NULL REFERENCES venues(id),
   race_number INTEGER,
-  race_name TEXT,
+  race_name TEXT NOT NULL,
   race_class TEXT,
   race_type TEXT CHECK(race_type IN ('芝', 'ダート', '障害')),
-  distance INTEGER,
+  distance INTEGER NOT NULL,
   track_condition TEXT CHECK(track_condition IN ('良', '稍重', '重', '不良')),
   age_condition TEXT,
   sex_condition TEXT,
   weight_condition TEXT,
   total_horses INTEGER,
-  prize_money INTEGER,
+  prize_money TEXT,
   jra_race_id TEXT UNIQUE,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  UNIQUE(race_date, venue_id, race_number)
 );
 ```
 
@@ -236,7 +239,7 @@ CREATE TABLE races (
 | distance | INTEGER | 距離（m） |
 | track_condition | TEXT | 馬場状態 |
 | total_horses | INTEGER | 出走頭数 |
-| prize_money | INTEGER | 賞金（万円） |
+| prize_money | TEXT | 賞金 |
 
 ---
 
@@ -247,9 +250,9 @@ CREATE TABLE race_entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   race_id INTEGER NOT NULL REFERENCES races(id),
   horse_id INTEGER NOT NULL REFERENCES horses(id),
-  jockey_id INTEGER REFERENCES jockeys(id),
+  jockey_id INTEGER NOT NULL REFERENCES jockeys(id),
   frame_number INTEGER,
-  horse_number INTEGER,
+  horse_number INTEGER NOT NULL,
   assigned_weight REAL,
   horse_weight INTEGER,
   weight_change INTEGER,
@@ -257,13 +260,12 @@ CREATE TABLE race_entries (
   place_odds_min REAL,
   place_odds_max REAL,
   popularity INTEGER,
-  career_wins INTEGER DEFAULT 0,
-  career_places INTEGER DEFAULT 0,
-  career_shows INTEGER DEFAULT 0,
-  career_runs INTEGER DEFAULT 0,
-  total_prize_money INTEGER DEFAULT 0,
+  career_wins INTEGER,
+  career_places INTEGER,
+  career_shows INTEGER,
+  career_runs INTEGER,
+  total_prize_money TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(race_id, horse_id)
 );
 ```
@@ -293,7 +295,7 @@ CREATE TABLE race_results (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   entry_id INTEGER NOT NULL UNIQUE REFERENCES race_entries(id),
   finish_position INTEGER,
-  finish_status TEXT DEFAULT '完走'
+  finish_status TEXT
     CHECK(finish_status IN ('完走', '取消', '除外', '中止', '失格', '降着')),
   finish_time TEXT,
   finish_time_ms INTEGER,
@@ -304,8 +306,7 @@ CREATE TABLE race_results (
   corner_positions TEXT,
   final_win_odds REAL,
   final_place_odds REAL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -430,45 +431,48 @@ CREATE TABLE jockey_trainer_stats (
 
 ### horse_scores（馬スコア）
 
+10要素構成のスコアテーブル（専門家会議2026/01/03で合意）。
+重み配分は `src/constants/ScoringConstants.ts` で一元管理。
+
 ```sql
 CREATE TABLE horse_scores (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   horse_id INTEGER NOT NULL REFERENCES horses(id),
   race_id INTEGER REFERENCES races(id),
-  recent_performance_score REAL DEFAULT 0,
-  course_aptitude_score REAL DEFAULT 0,
-  distance_aptitude_score REAL DEFAULT 0,
-  track_condition_score REAL DEFAULT 0,
-  last_3f_ability_score REAL DEFAULT 0,
-  bloodline_score REAL DEFAULT 0,
-  jockey_score REAL DEFAULT 0,
-  rotation_score REAL DEFAULT 0,
-  total_score REAL GENERATED ALWAYS AS (
-    recent_performance_score * 0.20 +
-    course_aptitude_score * 0.15 +
-    distance_aptitude_score * 0.15 +
-    track_condition_score * 0.10 +
-    last_3f_ability_score * 0.15 +
-    bloodline_score * 0.10 +
-    jockey_score * 0.10 +
-    rotation_score * 0.05
-  ) STORED,
+  -- 馬の能力・実績（59%）
+  recent_performance_score REAL DEFAULT 0,      -- 直近成績 22%
+  course_aptitude_score REAL DEFAULT 0,         -- コース適性 15%
+  distance_aptitude_score REAL DEFAULT 0,       -- 距離適性 12%
+  last_3f_ability_score REAL DEFAULT 0,         -- 上がり3F能力 10%
+  -- 実績・経験（5%）
+  g1_achievement_score REAL DEFAULT 0,          -- G1実績 5%
+  -- コンディション（15%）
+  rotation_score REAL DEFAULT 0,                -- ローテ適性 10%
+  track_condition_score REAL DEFAULT 0,         -- 馬場適性 5%
+  -- 人的要因（16%）
+  jockey_score REAL DEFAULT 0,                  -- 騎手能力 8%
+  trainer_score REAL DEFAULT 0,                 -- 調教師 8%
+  -- 枠順要因（5%）
+  post_position_score REAL DEFAULT 0,           -- 枠順効果 5%
+  -- 総合スコア（アプリケーション側で計算して保存）
+  total_score REAL DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(horse_id, race_id)
 );
 ```
 
 | スコア項目 | 重み |
 |-----------|------|
-| recent_performance_score | 20% |
+| recent_performance_score | 22% |
 | course_aptitude_score | 15% |
-| distance_aptitude_score | 15% |
-| track_condition_score | 10% |
-| last_3f_ability_score | 15% |
-| bloodline_score | 10% |
-| jockey_score | 10% |
-| rotation_score | 5% |
+| distance_aptitude_score | 12% |
+| last_3f_ability_score | 10% |
+| g1_achievement_score | 5% |
+| rotation_score | 10% |
+| track_condition_score | 5% |
+| jockey_score | 8% |
+| trainer_score | 8% |
+| post_position_score | 5% |
 
 ---
 
@@ -561,8 +565,8 @@ CREATE INDEX idx_horses_name ON horses(name);
 -- レース日付検索
 CREATE INDEX idx_races_date ON races(race_date);
 
--- 競馬場×日付検索
-CREATE INDEX idx_races_venue_date ON races(venue_id, race_date);
+-- 日付×競馬場検索
+CREATE INDEX idx_races_date_venue ON races(race_date, venue_id);
 
 -- 出馬表の馬ID検索
 CREATE INDEX idx_entries_horse ON race_entries(horse_id);
