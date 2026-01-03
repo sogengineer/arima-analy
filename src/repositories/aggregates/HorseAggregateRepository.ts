@@ -23,12 +23,13 @@ export class HorseAggregateRepository {
       const breederId = data.breeder ? this.getOrCreateBreeder(data.breeder) : null;
 
       // 既存チェック: 馬名 + 父 + 母 で一意判定
+      // COALESCEでNULLを-1に変換して確実にマッチング
       const existing = this.db.prepare(`
         SELECT id FROM horses
         WHERE name = ?
-          AND (sire_id = ? OR (sire_id IS NULL AND ? IS NULL))
-          AND (mare_id = ? OR (mare_id IS NULL AND ? IS NULL))
-      `).get(data.name, sireId, sireId, mareId, mareId) as { id: number } | undefined;
+          AND COALESCE(sire_id, -1) = COALESCE(?, -1)
+          AND COALESCE(mare_id, -1) = COALESCE(?, -1)
+      `).get(data.name, sireId, mareId) as { id: number } | undefined;
 
       if (existing) {
         // 既存の馬を更新
