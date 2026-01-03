@@ -1,5 +1,13 @@
+/**
+ * 馬場適性分析コマンド
+ *
+ * @remarks
+ * 登録済みの馬の馬場状態別成績を分析する。
+ */
+
 import { DatabaseConnection } from '../database/DatabaseConnection';
 import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
+import type { TrackStats } from '../types/RepositoryTypes';
 
 export class AnalyzeTrack {
   private readonly connection: DatabaseConnection;
@@ -10,6 +18,9 @@ export class AnalyzeTrack {
     this.horseRepo = new HorseQueryRepository(this.connection.getConnection());
   }
 
+  /**
+   * 馬場適性分析を実行
+   */
   async execute(): Promise<void> {
     try {
       console.log('🏁 馬場状態別成績分析を実行中...');
@@ -25,25 +36,29 @@ export class AnalyzeTrack {
 
       console.log(`📊 ${horses.length}頭の馬場適性を分析します\n`);
 
+      // バッチ取得
+      const horseIds = horses.filter(h => h.id != null).map(h => h.id!);
+      const trackStatsMap = this.horseRepo.getHorsesTrackStatsBatch(horseIds);
+
       const trackConditions = ['良', '稍重', '重', '不良'];
-      const analysisResults: { name: string; trackStats: Record<string, any> }[] = [];
+      const analysisResults: { name: string; trackStats: Record<string, TrackStats | null> }[] = [];
 
       for (const horse of horses) {
         if (!horse.id) continue;
 
         const horseAnalysis = {
           name: horse.name,
-          trackStats: {} as Record<string, any>
+          trackStats: {} as Record<string, TrackStats | null>
         };
 
         console.log(`🐎 ${horse.name} の馬場適性分析:`);
 
-        // 馬場適性データ取得
-        const trackStats = this.horseRepo.getHorseTrackStats(horse.id);
+        // キャッシュから取得
+        const trackStats = trackStatsMap.get(horse.id) ?? [];
 
         for (const condition of trackConditions) {
-          const stats = trackStats.find((s: any) => s.track_condition === condition);
-          horseAnalysis.trackStats[condition] = stats || { wins: 0, runs: 0 };
+          const stats = trackStats.find((s: TrackStats) => s.track_condition === condition);
+          horseAnalysis.trackStats[condition] = stats ?? null;
 
           if (stats && stats.runs > 0) {
             const winRate = (stats.wins / stats.runs * 100).toFixed(1);
@@ -74,6 +89,12 @@ export class AnalyzeTrack {
     }
   }
 
+  /**
+   * 成績グレードを取得
+   *
+   * @param winRate - 勝率
+   * @returns グレード文字列
+   */
   private getPerformanceGrade(winRate: number): string {
     if (winRate >= 0.5) return '🌟🌟🌟 (優秀)';
     if (winRate >= 0.3) return '🌟🌟 (良好)';
@@ -81,14 +102,20 @@ export class AnalyzeTrack {
     return '💧 (要注意)';
   }
 
-  private getBestTrackCondition(trackStats: Record<string, any>): { condition: string; win_rate: number } | null {
+  /**
+   * 最適な馬場状態を取得
+   *
+   * @param trackStats - 馬場別成績
+   * @returns 最適な馬場状態と勝率
+   */
+  private getBestTrackCondition(trackStats: Record<string, TrackStats | null>): { condition: string; win_rate: number } | null {
     let bestCondition = null;
     let maxWinRate = 0;
     let maxRuns = 0;
 
     for (const [condition, stats] of Object.entries(trackStats)) {
-      const runs = stats.runs || 0;
-      const wins = stats.wins || 0;
+      const runs = stats?.runs || 0;
+      const wins = stats?.wins || 0;
       const winRate = runs > 0 ? wins / runs : 0;
 
       if (runs >= 2 && winRate > maxWinRate) {
@@ -104,7 +131,12 @@ export class AnalyzeTrack {
     return bestCondition ? { condition: bestCondition, win_rate: maxWinRate } : null;
   }
 
-  private displayTrackConditionSummary(analysisResults: { name: string; trackStats: Record<string, any> }[]): void {
+  /**
+   * 馬場状態別サマリーを表示
+   *
+   * @param analysisResults - 分析結果の配列
+   */
+  private displayTrackConditionSummary(analysisResults: { name: string; trackStats: Record<string, TrackStats | null> }[]): void {
     console.log('📈 馬場適性サマリー:');
     console.log('='.repeat(50));
 

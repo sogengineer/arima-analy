@@ -1,3 +1,10 @@
+/**
+ * 過去戦績分析コマンド
+ *
+ * @remarks
+ * 登録済みの馬の過去戦績を分析し、成績サマリーと馬場適性を表示する。
+ */
+
 import { DatabaseConnection } from '../database/DatabaseConnection';
 import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
 
@@ -10,6 +17,11 @@ export class AnalyzePerformance {
     this.horseRepo = new HorseQueryRepository(this.connection.getConnection());
   }
 
+  /**
+   * 戦績分析を実行
+   *
+   * @param horseName - 特定の馬名（省略時は全馬を分析）
+   */
   async execute(horseName?: string): Promise<void> {
     try {
       console.log('🏁 登録済み過去戦績の分析:');
@@ -38,12 +50,17 @@ export class AnalyzePerformance {
 
       console.log(`\n📊 ${horses.length}頭の戦績分析結果:\n`);
 
+      // バッチ取得
+      const horseIds = horses.map(h => h.id);
+      const raceResultsMap = this.horseRepo.getHorsesRaceResultsBatch(horseIds);
+      const trackStatsMap = this.horseRepo.getHorsesTrackStatsBatch(horseIds);
+
       let totalHorsesWithData = 0;
       let totalRaces = 0;
 
       for (const horse of horses) {
         try {
-          const raceResults = this.horseRepo.getHorseRaceResults(horse.id);
+          const raceResults = raceResultsMap.get(horse.id) ?? [];
 
           if (raceResults.length === 0) {
             console.log(`🐎 ${horse.name}: レース結果なし`);
@@ -81,8 +98,8 @@ export class AnalyzePerformance {
             console.log(`   成績: ${wins}勝${places}連対${shows}複勝 (勝率${winRate}% 連対率${placeRate}% 複勝率${showRate}%)`);
           }
 
-          // 馬場適性
-          const trackPerf = this.horseRepo.getHorseTrackStats(horse.id);
+          // 馬場適性（キャッシュから取得）
+          const trackPerf = trackStatsMap.get(horse.id) ?? [];
 
           if (trackPerf.length > 0) {
             console.log('   馬場適性:');

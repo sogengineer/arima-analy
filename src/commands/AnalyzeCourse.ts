@@ -1,5 +1,13 @@
+/**
+ * コース適性分析コマンド
+ *
+ * @remarks
+ * 登録済みの馬の中山2500mコース適性を分析する。
+ */
+
 import { DatabaseConnection } from '../database/DatabaseConnection';
 import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
+import type { CourseStats, TrackStats } from '../types/RepositoryTypes';
 
 export class AnalyzeCourse {
   private readonly connection: DatabaseConnection;
@@ -10,6 +18,9 @@ export class AnalyzeCourse {
     this.horseRepo = new HorseQueryRepository(this.connection.getConnection());
   }
 
+  /**
+   * コース適性分析を実行
+   */
   async execute(): Promise<void> {
     try {
       console.log('🏇 中山2500mコース適性分析を実行中...');
@@ -25,6 +36,11 @@ export class AnalyzeCourse {
 
       console.log(`📊 ${horses.length}頭の中山コース適性を分析します\n`);
 
+      // バッチ取得
+      const horseIds = horses.filter(h => h.id != null).map(h => h.id!);
+      const courseStatsMap = this.horseRepo.getHorsesCourseStatsBatch(horseIds);
+      const trackStatsMap = this.horseRepo.getHorsesTrackStatsBatch(horseIds);
+
       const analysisResults: { name: string; aptitudeScore: number; stats: any }[] = [];
 
       for (const horse of horses) {
@@ -32,12 +48,12 @@ export class AnalyzeCourse {
 
         console.log(`🐎 ${horse.name} のコース適性分析:`);
 
-        // 馬場適性データ取得
-        const courseStats = this.horseRepo.getHorseCourseStats(horse.id);
-        const trackStats = this.horseRepo.getHorseTrackStats(horse.id);
+        // キャッシュから取得
+        const courseStats = courseStatsMap.get(horse.id) ?? [];
+        const trackStats = trackStatsMap.get(horse.id) ?? [];
 
         // 中山コースの実績
-        const nakayamaStats = courseStats.find((s: any) => s.venue_name === '中山');
+        const nakayamaStats = courseStats.find((s: CourseStats) => s.venue_name === '中山');
 
         if (nakayamaStats && nakayamaStats.runs > 0) {
           const winRate = nakayamaStats.runs > 0 ? (nakayamaStats.wins / nakayamaStats.runs * 100).toFixed(1) : '0';
@@ -47,7 +63,7 @@ export class AnalyzeCourse {
         }
 
         // 芝の実績
-        const turfStats = trackStats.find((s: any) => s.race_type === '芝');
+        const turfStats = trackStats.find((s: TrackStats) => s.race_type === '芝');
         if (turfStats && turfStats.runs > 0) {
           const winRate = (turfStats.wins / turfStats.runs * 100).toFixed(1);
           console.log(`  芝適性: ${turfStats.wins}勝/${turfStats.runs}走 (勝率${winRate}%)`);
@@ -74,7 +90,14 @@ export class AnalyzeCourse {
     }
   }
 
-  private calculateAptitudeScore(nakayamaStats: any, trackStats: any[]): number {
+  /**
+   * 適性スコアを計算
+   *
+   * @param nakayamaStats - 中山コース成績
+   * @param trackStats - 馬場別成績
+   * @returns 適性スコア（0-100）
+   */
+  private calculateAptitudeScore(nakayamaStats: CourseStats | undefined, trackStats: TrackStats[]): number {
     let score = 50; // ベーススコア
 
     // 中山コース実績
@@ -84,7 +107,7 @@ export class AnalyzeCourse {
     }
 
     // 芝実績
-    const turfStats = trackStats.find((s: any) => s.race_type === '芝');
+    const turfStats = trackStats.find((s: TrackStats) => s.race_type === '芝');
     if (turfStats && turfStats.runs > 0) {
       const winRate = turfStats.wins / turfStats.runs;
       score += winRate * 20;
@@ -93,6 +116,11 @@ export class AnalyzeCourse {
     return Math.min(score, 100);
   }
 
+  /**
+   * 適性ランキングを表示
+   *
+   * @param analysisResults - 分析結果の配列
+   */
   private displayAptitudeRanking(analysisResults: { name: string; aptitudeScore: number }[]): void {
     console.log('🏆 中山2500m適性ランキング:');
     console.log('='.repeat(60));

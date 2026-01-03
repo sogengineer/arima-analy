@@ -1,6 +1,10 @@
 /**
- * 馬情報の取得リポジトリ
- * JOINでまとめて取得
+ * 馬情報の参照リポジトリ
+ *
+ * @remarks
+ * 馬の詳細情報、レース結果、コース別成績、馬場別成績を取得する。
+ * JOINやビューを活用して効率的なデータ取得を行う。
+ * バッチ取得メソッド
  */
 
 import type Database from 'better-sqlite3';
@@ -150,6 +154,9 @@ export class HorseQueryRepository {
 
   /**
    * 馬の直近の騎手IDを取得
+   *
+   * @param horseId - 馬ID
+   * @returns 直近レースの騎手ID、存在しない場合はnull
    */
   getRecentJockeyForHorse(horseId: number): number | null {
     const result = this.db.prepare(`
@@ -161,5 +168,150 @@ export class HorseQueryRepository {
       LIMIT 1
     `).get(horseId) as { jockey_id: number } | undefined;
     return result?.jockey_id ?? null;
+  }
+
+  // ============================================================
+  // バッチ取得メソッド
+  // ============================================================
+
+  /**
+   * 複数馬の詳細情報を一括取得
+   *
+   * @param horseIds - 馬IDの配列
+   * @returns 馬詳細のMap（horseId → HorseDetail）
+   *
+   * @example
+   * ```typescript
+   * const detailsMap = repo.getHorsesWithDetailsBatch([1, 2, 3]);
+   * const horse1 = detailsMap.get(1);
+   * ```
+   */
+  getHorsesWithDetailsBatch(horseIds: number[]): Map<number, HorseDetail> {
+    if (horseIds.length === 0) return new Map();
+
+    const placeholders = horseIds.map(() => '?').join(',');
+    const results = this.db.prepare(
+      `SELECT * FROM v_horse_details WHERE id IN (${placeholders})`
+    ).all(...horseIds) as HorseDetail[];
+
+    const map = new Map<number, HorseDetail>();
+    for (const detail of results) {
+      if (detail.id != null) {
+        map.set(detail.id, detail);
+      }
+    }
+    return map;
+  }
+
+  /**
+   * 複数馬のレース結果を一括取得
+   *
+   * @param horseIds - 馬IDの配列
+   * @returns レース結果のMap（horseId → HorseRaceResult[]）
+   *
+   * @example
+   * ```typescript
+   * const resultsMap = repo.getHorsesRaceResultsBatch([1, 2, 3]);
+   * const horse1Results = resultsMap.get(1) ?? [];
+   * ```
+   */
+  getHorsesRaceResultsBatch(horseIds: number[]): Map<number, HorseRaceResult[]> {
+    if (horseIds.length === 0) return new Map();
+
+    const placeholders = horseIds.map(() => '?').join(',');
+    const sql = `
+      SELECT
+        e.horse_id,
+        r.id as race_id,
+        r.race_name,
+        r.race_date,
+        r.race_class,
+        r.distance,
+        r.race_type,
+        r.track_condition,
+        v.name as venue_name,
+        e.jockey_id,
+        e.popularity,
+        rr.finish_position,
+        rr.finish_time,
+        rr.last_3f_time,
+        rr.margin as time_diff_seconds
+      FROM race_entries e
+      JOIN races r ON e.race_id = r.id
+      JOIN venues v ON r.venue_id = v.id
+      LEFT JOIN race_results rr ON rr.entry_id = e.id
+      WHERE e.horse_id IN (${placeholders})
+      ORDER BY e.horse_id, r.race_date DESC
+    `;
+    const results = this.db.prepare(sql).all(...horseIds) as (HorseRaceResult & { horse_id: number })[];
+
+    const map = new Map<number, HorseRaceResult[]>();
+    for (const horseId of horseIds) {
+      map.set(horseId, []);
+    }
+    for (const result of results) {
+      const list = map.get(result.horse_id);
+      if (list) {
+        list.push(result);
+      }
+    }
+    return map;
+  }
+
+  /**
+   * 複数馬のコース別成績を一括取得
+   *
+   * @param horseIds - 馬IDの配列
+   * @returns コース別成績のMap（horseId → CourseStats[]）
+   */
+  getHorsesCourseStatsBatch(horseIds: number[]): Map<number, CourseStats[]> {
+    if (horseIds.length === 0) return new Map();
+
+    const placeholders = horseIds.map(() => '?').join(',');
+    const results = this.db.prepare(`
+      SELECT hcs.*, v.name as venue_name
+      FROM horse_course_stats hcs
+      JOIN venues v ON hcs.venue_id = v.id
+      WHERE hcs.horse_id IN (${placeholders})
+    `).all(...horseIds) as (CourseStats & { horse_id: number })[];
+
+    const map = new Map<number, CourseStats[]>();
+    for (const horseId of horseIds) {
+      map.set(horseId, []);
+    }
+    for (const stat of results) {
+      const list = map.get(stat.horse_id);
+      if (list) {
+        list.push(stat);
+      }
+    }
+    return map;
+  }
+
+  /**
+   * 複数馬の馬場別成績を一括取得
+   *
+   * @param horseIds - 馬IDの配列
+   * @returns 馬場別成績のMap（horseId → TrackStats[]）
+   */
+  getHorsesTrackStatsBatch(horseIds: number[]): Map<number, TrackStats[]> {
+    if (horseIds.length === 0) return new Map();
+
+    const placeholders = horseIds.map(() => '?').join(',');
+    const results = this.db.prepare(`
+      SELECT * FROM horse_track_stats WHERE horse_id IN (${placeholders})
+    `).all(...horseIds) as (TrackStats & { horse_id: number })[];
+
+    const map = new Map<number, TrackStats[]>();
+    for (const horseId of horseIds) {
+      map.set(horseId, []);
+    }
+    for (const stat of results) {
+      const list = map.get(stat.horse_id);
+      if (list) {
+        list.push(stat);
+      }
+    }
+    return map;
   }
 }
