@@ -27,6 +27,9 @@ export class DatabaseConnection {
    */
   private initializeDatabase(): void {
     try {
+      // 外部キー制約を有効化（SQLiteはデフォルトで無効）
+      this.db.pragma('foreign_keys = ON');
+
       const schemaPath = join(__dirname, 'schema.sql');
       const schema = readFileSync(schemaPath, 'utf-8');
       this.db.exec(schema);
