@@ -66,13 +66,26 @@ export class RaceAggregateRepository {
       }
 
       // 新規作成
+      // 前走データ: レース番号不明のため自動採番
+      let raceNumber: number;
+      if (matchByName && data.raceNumber == null) {
+        // 同じ日・同じ会場の最大race_number + 1 を使用
+        const maxRow = this.db.prepare(`
+          SELECT COALESCE(MAX(race_number), 0) as max_num FROM races
+          WHERE race_date = ? AND venue_id = ?
+        `).get(data.raceDate, venueId) as { max_num: number };
+        raceNumber = maxRow.max_num + 1;
+      } else {
+        raceNumber = data.raceNumber ?? 1;
+      }
+
       const result = this.db.prepare(`
         INSERT INTO races (race_date, venue_id, race_number, race_name, race_class, race_type, distance, track_condition, total_horses)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         data.raceDate,
         venueId,
-        data.raceNumber ?? 1,
+        raceNumber,
         data.raceName,
         data.raceClass ?? null,
         data.raceType ?? null,
