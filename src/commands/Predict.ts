@@ -7,7 +7,7 @@ interface PredictionResult {
   showProbability: number;
 }
 
-export class PredictCommand {
+export class Predict {
   private readonly db: ArimaDatabase;
 
   constructor() {

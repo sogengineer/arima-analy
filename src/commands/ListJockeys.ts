@@ -1,6 +1,6 @@
 import { ArimaDatabase } from '../database/Database';
 
-export class JockeysCommand {
+export class ListJockeys {
   private readonly db: ArimaDatabase;
 
   constructor() {

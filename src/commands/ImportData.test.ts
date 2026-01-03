@@ -2,14 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ArimaDatabase } from '../database/Database.js';
 import { ExtractedRaceData, HorseData } from '../types/HorseData.js';
 import { writeFileSync, unlinkSync, existsSync } from 'node:fs';
-import { ManualDataCommand } from './ManualDataCommand.js';
+import { ImportData } from './ImportData.js';
 
 // テスト用DBパス
 const TEST_DB_PATH = './test-import.db';
 const TEST_JSON_PATH = './test-extracted-data.json';
 
 /**
- * ManualDataCommand インポートテスト
+ * ImportData インポートテスト
  *
  * ## 更新判定ロジック（一致条件）
  *
@@ -163,7 +163,7 @@ function createPreviousRace(overrides: Partial<{
 // テストスイート
 // ============================================
 
-describe('ManualDataCommand - インポート機能', () => {
+describe('ImportData - インポート機能', () => {
   let db: ArimaDatabase;
 
   beforeEach(() => {
@@ -202,8 +202,8 @@ describe('ManualDataCommand - インポート機能', () => {
 
       writeFileSync(TEST_JSON_PATH, JSON.stringify(raceData));
 
-      // ManualDataCommand経由でインポート（DBを閉じるので別インスタンスで確認）
-      const command = new (class extends ManualDataCommand {
+      // ImportData経由でインポート（DBを閉じるので別インスタンスで確認）
+      const command = new (class extends ImportData {
         constructor() {
           super();
           // @ts-expect-error - プライベートプロパティにアクセス

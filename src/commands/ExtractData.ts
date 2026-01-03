@@ -1,7 +1,7 @@
 import { HorseDataExtractor } from '../utils/HorseDataExtractor.js';
 import { writeFileSync } from 'node:fs';
 
-export class StandaloneExtractCommand {
+export class ExtractData {
   async extractFromHTML(htmlFilePath: string, outputFormat: 'detailed' | 'summary' | 'csv' = 'detailed', sourceUrl: string = ''): Promise<void> {
     try {
       console.log(`🔍 HTMLファイルから馬データを抽出中: ${htmlFilePath}`);

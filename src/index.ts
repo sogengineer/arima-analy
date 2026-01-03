@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { HorsesCommand } from './commands/HorsesCommand';
-import { JockeysCommand } from './commands/JockeysCommand';
-import { PerformanceCommand } from './commands/PerformanceCommand';
-import { TrackAnalysisCommand } from './commands/TrackAnalysisCommand';
-import { CourseAnalysisCommand } from './commands/CourseAnalysisCommand';
-import { ScoreCommand } from './commands/ScoreCommand';
-import { PredictCommand } from './commands/PredictCommand';
-import { ManualDataCommand } from './commands/ManualDataCommand';
-import { StandaloneExtractCommand } from './commands/StandaloneExtractCommand.js';
+import { ListHorses } from './commands/ListHorses';
+import { ListJockeys } from './commands/ListJockeys';
+import { AnalyzePerformance } from './commands/AnalyzePerformance';
+import { AnalyzeTrack } from './commands/AnalyzeTrack';
+import { AnalyzeCourse } from './commands/AnalyzeCourse';
+import { CalculateScore } from './commands/CalculateScore';
+import { Predict } from './commands/Predict';
+import { ImportData } from './commands/ImportData';
+import { ExtractData } from './commands/ExtractData';
 
 const program = new Command();
 
@@ -22,7 +22,7 @@ program
   .command('horses')
   .description('登録済み出走馬一覧表示と手動入力ガイド')
   .action(async () => {
-    const command = new HorsesCommand();
+    const command = new ListHorses();
     await command.execute();
   });
 
@@ -30,7 +30,7 @@ program
   .command('jockeys')
   .description('登録済み騎手一覧表示と手動入力ガイド')
   .action(async () => {
-    const command = new JockeysCommand();
+    const command = new ListJockeys();
     await command.execute();
   });
 
@@ -39,7 +39,7 @@ program
   .description('登録済み戦績の分析表示')
   .argument('[horse_name]', '特定の馬の戦績のみ分析する場合の馬名')
   .action(async (horseName?: string) => {
-    const command = new PerformanceCommand();
+    const command = new AnalyzePerformance();
     await command.execute(horseName);
   });
 
@@ -47,7 +47,7 @@ program
   .command('track-analysis')
   .description('馬場状態別成績分析')
   .action(async () => {
-    const command = new TrackAnalysisCommand();
+    const command = new AnalyzeTrack();
     await command.execute();
   });
 
@@ -55,7 +55,7 @@ program
   .command('course-analysis')
   .description('中山2500m適性分析')
   .action(async () => {
-    const command = new CourseAnalysisCommand();
+    const command = new AnalyzeCourse();
     await command.execute();
   });
 
@@ -65,7 +65,7 @@ program
   .option('-r, --race <id>', '対象レースID（数値またはレース名）')
   .option('-l, --list', '登録済みレース一覧を表示')
   .action(async (options: { race?: string; list?: boolean }) => {
-    const command = new ScoreCommand();
+    const command = new CalculateScore();
     await command.execute(options);
   });
 
@@ -73,7 +73,7 @@ program
   .command('predict')
   .description('機械学習で連帯・3着内確率を予測（旧版）')
   .action(async () => {
-    const command = new PredictCommand();
+    const command = new Predict();
     await command.execute();
   });
 
@@ -134,10 +134,10 @@ program
 
       // クロスチェック
       if (options.crossCheck) {
-        const { ScoreCommand } = await import('./commands/ScoreCommand.js');
-        const scoreCmd = new ScoreCommand();
+        const { CalculateScore } = await import('./commands/CalculateScore.js');
+        const scoreCmd = new CalculateScore();
         // スコアリング結果を取得してクロスチェック
-        // 注: ScoreCommandを実行せず、DBから直接取得する方が良い
+        // 注: CalculateScoreを実行せず、DBから直接取得する方が良い
       }
 
     } finally {
@@ -150,7 +150,7 @@ program
   .description('JSONファイルからデータをインポート')
   .argument('<file>', 'JSONファイルのパス')
   .action(async (file: string) => {
-    const command = new ManualDataCommand();
+    const command = new ImportData();
     await command.importFromJSON(file);
   });
 
@@ -159,7 +159,7 @@ program
   .description('馬を手動で追加')
   .argument('<data>', 'JSON形式の馬データ')
   .action(async (data: string) => {
-    const command = new ManualDataCommand();
+    const command = new ImportData();
     await command.addSingleHorse(data);
   });
 
@@ -168,7 +168,7 @@ program
   .description('抽出されたJSONファイルをデータベースにインポート')
   .argument('<file>', '抽出されたJSONファイルのパス')
   .action(async (file: string) => {
-    const command = new ManualDataCommand();
+    const command = new ImportData();
     await command.importExtractedJSON(file);
   });
 
@@ -176,7 +176,7 @@ program
   .command('show-horses')
   .description('登録馬一覧を血統情報付きで表示')
   .action(async () => {
-    const command = new ManualDataCommand();
+    const command = new ImportData();
     await command.showHorses();
   });
 
@@ -184,7 +184,7 @@ program
   .command('show-sires')
   .description('種牡馬一覧と統計を表示')
   .action(async () => {
-    const command = new ManualDataCommand();
+    const command = new ImportData();
     await command.showBloodlineStats();
   });
 
@@ -193,7 +193,7 @@ program
   .description('HTMLファイルから馬データを抽出して表示')
   .argument('<file>', 'HTMLファイルのパス')
   .action(async (file: string) => {
-    const command = new ManualDataCommand();
+    const command = new ImportData();
     await command.extractHorseDataFromHTML(file);
   });
 
@@ -203,7 +203,7 @@ program
   .argument('<file>', 'HTMLファイルのパス')
   .option('-f, --format <format>', '出力形式 (detailed|summary|csv)', 'detailed')
   .action(async (file: string, options: { format: 'detailed' | 'summary' | 'csv' }) => {
-    const command = new StandaloneExtractCommand();
+    const command = new ExtractData();
     await command.extractFromHTML(file, options.format);
   });
 
@@ -228,7 +228,7 @@ program
   .option('-f, --format <format>', '出力形式 (detailed|summary|csv)', 'detailed')
   .option('-o, --html-output <file>', 'HTML出力ファイル', 'data/jra-page.html')
   .action(async (url: string, options: { format: 'detailed' | 'summary' | 'csv'; htmlOutput: string }) => {
-    const command = new StandaloneExtractCommand();
+    const command = new ExtractData();
     await command.fetchAndExtract(url, options.format, options.htmlOutput);
   });
 

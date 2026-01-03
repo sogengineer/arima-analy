@@ -36,45 +36,63 @@
 arima/
 ├── src/
 │   ├── index.ts                    # メインエントリーポイント（CLI定義）
-│   ├── commands/                   # コマンド実装
-│   │   ├── HorsesCommand.ts        # 馬一覧表示
-│   │   ├── JockeysCommand.ts       # 騎手一覧表示
-│   │   ├── PerformanceCommand.ts   # 戦績分析
-│   │   ├── TrackAnalysisCommand.ts # 馬場分析
-│   │   ├── CourseAnalysisCommand.ts # コース分析
-│   │   ├── ScoreCommand.ts         # スコアリング
-│   │   ├── PredictCommand.ts       # 統計予測
-│   │   ├── ManualDataCommand.ts    # データインポート
-│   │   └── StandaloneExtractCommand.ts # データ抽出
+│   ├── commands/                   # コマンド実装（動詞ベース命名）
+│   │   ├── ListHorses.ts           # 馬一覧表示
+│   │   ├── ListJockeys.ts          # 騎手一覧表示
+│   │   ├── AnalyzePerformance.ts   # 戦績分析
+│   │   ├── AnalyzeTrack.ts         # 馬場分析
+│   │   ├── AnalyzeCourse.ts        # コース分析
+│   │   ├── CalculateScore.ts       # スコアリング
+│   │   ├── Predict.ts              # 統計予測
+│   │   ├── ImportData.ts           # データインポート
+│   │   └── ExtractData.ts          # データ抽出
+│   ├── constants/                  # 定数定義
+│   │   ├── ScoringConstants.ts     # スコア重み・着順スコア
+│   │   ├── DistanceConstants.ts    # 距離・期間閾値
+│   │   └── MLConstants.ts          # 機械学習パラメータ
 │   ├── database/
-│   │   ├── Database.ts             # データベースアクセス層
+│   │   ├── Database.ts             # レガシーDB（後方互換）
+│   │   ├── DatabaseConnection.ts   # 接続管理
 │   │   └── schema.sql              # スキーマ定義
+│   ├── domain/                     # ドメイン層（リッチドメインモデル）
+│   │   ├── entities/
+│   │   │   ├── Horse.ts            # 馬エンティティ（スコア計算内包）
+│   │   │   ├── Jockey.ts           # 騎手エンティティ
+│   │   │   ├── Race.ts             # レースエンティティ
+│   │   │   └── RaceResult.ts       # レース結果
+│   │   ├── valueObjects/
+│   │   │   ├── Score.ts            # スコア値オブジェクト
+│   │   │   └── ScoreComponents.ts  # 7要素スコア構成
+│   │   └── services/
+│   │       └── ScoringOrchestrator.ts # スコアリングオーケストレーター
+│   ├── repositories/               # リポジトリ層
+│   │   ├── queries/                # 取得系（JOIN）
+│   │   │   ├── HorseQueryRepository.ts
+│   │   │   ├── RaceQueryRepository.ts
+│   │   │   ├── JockeyQueryRepository.ts
+│   │   │   └── StatsQueryRepository.ts
+│   │   └── aggregates/             # 更新系（集約単位）
+│   │       ├── HorseAggregateRepository.ts
+│   │       ├── RaceAggregateRepository.ts
+│   │       └── ScoreAggregateRepository.ts
 │   ├── models/
-│   │   ├── ScoringModel.ts         # スコアリングモデル
 │   │   └── MachineLearningModel.ts # 機械学習モデル
 │   ├── types/
 │   │   ├── HorseData.ts            # データ型定義
+│   │   ├── RepositoryTypes.ts      # リポジトリ型定義
 │   │   ├── ml-modules.d.ts         # ML関連型定義
 │   │   └── regression.d.ts         # 回帰分析型定義
 │   └── utils/
 │       ├── HorseDataExtractor.ts   # HTMLデータ抽出
 │       └── JRAFetcher.ts           # JRAデータ取得
 ├── data/                           # データディレクトリ
-│   ├── jra-page.html               # 取得したHTML
-│   ├── horse-extracted-data.json   # 抽出データ
-│   └── sample_horses.json          # サンプルデータ
 ├── docs/                           # ドキュメント
-│   ├── COMMANDS.md                 # コマンドリファレンス
-│   ├── DATABASE.md                 # データベース構造
-│   ├── MODELS.md                   # 分析モデル詳細
-│   └── DEVELOPMENT.md              # 開発者向け情報（本ファイル）
 ├── dist/                           # ビルド出力
 ├── .claude/
 │   └── commands/                   # Claude Codeスキル定義
 ├── arima.db                        # SQLiteデータベース
 ├── package.json
 ├── tsconfig.json
-├── bunfig.toml
 └── README.md
 ```
 
@@ -257,14 +275,15 @@ interface MLFeatures {
   avgFinishPosition: number;
 }
 
-// スコア構成要素
+// スコア構成要素（7要素）
 interface ScoreComponents {
-  recentPerformanceScore: number;
-  nakayamaAptitudeScore: number;
-  distanceAptitudeScore: number;
-  last3FAbilityScore: number;
-  g1AchievementScore: number;
-  rotationAptitudeScore: number;
+  recentPerformanceScore: number;   // 直近成績 25%
+  venueAptitudeScore: number;       // 会場適性 18%
+  distanceAptitudeScore: number;    // 距離適性 15%
+  last3FAbilityScore: number;       // 上がり3F 7%
+  g1AchievementScore: number;       // G1実績 5%
+  rotationAptitudeScore: number;    // ローテ 15%
+  jockeyScore: number;              // 騎手能力 15%
 }
 ```
 
@@ -280,7 +299,9 @@ interface ScoreComponents {
 
 ### ファイル命名
 
-- クラス: PascalCase（例: `ScoringModel.ts`）
+- コマンド: 動詞ベースPascalCase（例: `CalculateScore.ts`, `ListHorses.ts`）
+- エンティティ: 名詞PascalCase（例: `Horse.ts`, `Jockey.ts`）
+- リポジトリ: 〇〇Repository.ts（例: `HorseQueryRepository.ts`）
 - ユーティリティ: PascalCase（例: `HorseDataExtractor.ts`）
 - 型定義: PascalCase（例: `HorseData.ts`）
 

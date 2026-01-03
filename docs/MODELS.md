@@ -18,32 +18,35 @@
 ### 実装ファイル
 
 ```
-src/models/ScoringModel.ts
-src/commands/ScoreCommand.ts
+src/domain/entities/Horse.ts       # スコア計算ロジック（リッチドメインモデル）
+src/domain/entities/Jockey.ts      # 騎手スコア計算
+src/domain/services/ScoringOrchestrator.ts  # オーケストレーター
+src/commands/CalculateScore.ts     # スコアリングコマンド
+src/constants/ScoringConstants.ts  # 定数定義
 ```
 
 ### スコア構成
 
 | 評価項目 | 重み | 説明 |
 |---------|------|------|
-| 直近成績スコア | 20% | 直近5戦の着順・人気・オッズを評価 |
-| コース適性（中山） | 18% | 中山競馬場での過去成績 |
-| 騎手能力 | 15% | 騎手の中山成績・G1成績・調教師とのコンビ成績 |
-| G1実績 | 13% | G1レースでの入賞実績 |
-| 距離適性 | 12% | 2200m以上の長距離での成績 |
-| 上がり3F能力 | 12% | レース終盤での差し・追い込み能力 |
-| ローテ適性 | 10% | 出走間隔と成績の関係 |
+| 直近成績スコア | 25% | 直近5戦の着順・人気・オッズを評価 |
+| コース適性 | 18% | 会場（中山等）での過去成績 |
+| 距離適性 | 15% | 目標距離±300mでの成績 |
+| 騎手能力 | 15% | 会場成績・G1成績・調教師とのコンビ成績 |
+| ローテ適性 | 15% | 出走間隔と成績の関係 |
+| 上がり3F能力 | 7% | レース終盤での差し・追い込み能力 |
+| G1実績 | 5% | G1レースでの入賞実績 |
 
 ### 計算式
 
 ```
-総合スコア = (直近成績 × 0.20) + (コース適性 × 0.18) + (騎手能力 × 0.15) +
-             (G1実績 × 0.13) + (距離適性 × 0.12) + (上がり3F × 0.12) + (ローテ × 0.10)
+総合スコア = (直近成績 × 0.25) + (コース適性 × 0.18) + (距離適性 × 0.15) +
+             (騎手能力 × 0.15) + (ローテ × 0.15) + (上がり3F × 0.07) + (G1実績 × 0.05)
 ```
 
 ---
 
-### 1. 直近成績スコア（20%）
+### 1. 直近成績スコア（25%）
 
 直近5戦の成績を新しいレースほど重視して評価します。
 
@@ -371,8 +374,11 @@ src/commands/PredictCommand.ts
 
 | ファイル | 説明 |
 |---------|------|
-| `src/models/ScoringModel.ts` | スコアリングモデル実装 |
+| `src/domain/entities/Horse.ts` | 馬エンティティ（スコア計算内包） |
+| `src/domain/entities/Jockey.ts` | 騎手エンティティ（騎手スコア計算） |
+| `src/domain/services/ScoringOrchestrator.ts` | スコアリングオーケストレーター |
 | `src/models/MachineLearningModel.ts` | 機械学習モデル実装 |
-| `src/commands/ScoreCommand.ts` | スコアリングコマンド |
-| `src/commands/PredictCommand.ts` | 統計予測コマンド |
-| `src/types/HorseData.ts` | データ型定義 |
+| `src/commands/CalculateScore.ts` | スコアリングコマンド |
+| `src/commands/Predict.ts` | 統計予測コマンド |
+| `src/constants/ScoringConstants.ts` | スコア定数定義 |
+| `src/types/RepositoryTypes.ts` | リポジトリ型定義 |

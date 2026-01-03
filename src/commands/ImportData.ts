@@ -2,7 +2,7 @@ import { ArimaDatabase } from '../database/Database.js';
 import { readFileSync } from 'node:fs';
 import { ExtractedRaceData, HorseData, PreviousRaceResult } from '../types/HorseData.js';
 
-export class ManualDataCommand {
+export class ImportData {
   private readonly db: ArimaDatabase;
 
   constructor() {
