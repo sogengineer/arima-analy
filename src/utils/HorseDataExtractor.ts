@@ -58,9 +58,11 @@ export class HorseDataExtractor {
 
     // 馬データのマッチング（マルチライン対応、前走データまで含める）
     // 馬番が空の場合（枠順未確定）にも対応: (\d+)? で馬番をオプションに
-    const horseMatches = this.htmlContent.matchAll(
+    const horseMatches = [...this.htmlContent.matchAll(
       /<tr>\s*<td class="waku">.*?<td class="num">(?:<span[^>]*>.*?<\/span>\s*)?(\d+)?.*?<\/td>\s*<td class="horse">(.*?)<\/td>\s*<td class="jockey">(.*?)<\/td>(.*?)<\/tr>/gs
-    );
+    )];
+    // 枠番の計算に総頭数が必要なため、先に全馬をマッチングしてから処理する
+    const totalHorses = horseMatches.length;
 
     let index = 0;
     for (const match of horseMatches) {
@@ -75,7 +77,7 @@ export class HorseDataExtractor {
         const basicInfo = this.parseBasicInfo(horseData);
         const bloodline = options.includeBloodline !== false ? this.parseBloodline(horseData) : this.getEmptyBloodline();
         const jockey = this.parseJockeyInfo(jockeyData);
-        const raceInfo = this.parseRaceInfo_Horse(horseData, horseNumber, jockey.weight);
+        const raceInfo = this.parseRaceInfo_Horse(horseData, horseNumber, jockey.weight, totalHorses);
         const record = this.parseRaceRecord(horseData);
         const previousRaces = options.includePreviousRaces !== false ?
           this.parsePreviousRaces(pastRacesData, options.maxPreviousRaces || 4) : [];
@@ -158,7 +160,7 @@ export class HorseDataExtractor {
     return { name, weight };
   }
 
-  private parseRaceInfo_Horse(horseData: string, horseNumber: number, assignedWeight: number): RaceInfo {
+  private parseRaceInfo_Horse(horseData: string, horseNumber: number, assignedWeight: number, totalHorses: number): RaceInfo {
     const oddsMatch = horseData.match(/<span class="num"><strong.*?>([\d.]+)<\/strong>/);
     const winOdds = oddsMatch ? Number.parseFloat(oddsMatch[1]) : 0;
 
@@ -166,12 +168,42 @@ export class HorseDataExtractor {
     const popularity = popularityMatch ? Number.parseInt(popularityMatch[1]) : 0;
 
     return {
-      frameNumber: Math.ceil(horseNumber / 2), // 簡易計算
+      frameNumber: HorseDataExtractor.calculateFrameNumber(horseNumber, totalHorses),
       horseNumber,
       assignedWeight,
       winOdds,
       popularity
     };
+  }
+
+  /**
+   * JRAの枠番割当規則に基づいて馬番から枠番を計算
+   *
+   * @remarks
+   * 8枠制。8頭以下は馬番＝枠番。9頭以上は各枠に ⌊総頭数/8⌋ 頭を基本とし、
+   * 余り（総頭数 mod 8）の頭数ぶんだけ大きい枠番の枠から順に1頭ずつ多く割り当てる。
+   * 例: 14頭は1〜2枠が1頭・3〜8枠が2頭、17頭は8枠のみ3頭、18頭は7・8枠が3頭。
+   */
+  static calculateFrameNumber(horseNumber: number, totalHorses: number): number {
+    const FRAME_COUNT = 8;
+    if (horseNumber < 1) return 1;
+    if (totalHorses <= FRAME_COUNT) {
+      return Math.min(horseNumber, FRAME_COUNT);
+    }
+
+    const base = Math.floor(totalHorses / FRAME_COUNT);
+    const extra = totalHorses % FRAME_COUNT;
+    // 小さい枠番側: base頭ずつ入る枠が (8 - extra) 枠
+    const smallFrames = FRAME_COUNT - extra;
+    const boundary = smallFrames * base; // base頭枠に入る最後の馬番
+
+    if (horseNumber <= boundary) {
+      return Math.ceil(horseNumber / base);
+    }
+    return Math.min(
+      FRAME_COUNT,
+      smallFrames + Math.ceil((horseNumber - boundary) / (base + 1))
+    );
   }
 
   private parseRaceRecord(horseData: string): RaceRecord {
