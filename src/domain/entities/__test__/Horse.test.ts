@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { Horse, HorseBuilder } from '../Horse';
 import { RaceResult } from '../RaceResult';
 import { Race } from '../Race';

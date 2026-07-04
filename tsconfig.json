@@ -12,6 +12,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "types": ["node", "bun"],
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,

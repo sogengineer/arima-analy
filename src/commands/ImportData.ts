@@ -154,7 +154,7 @@ export class ImportData {
         console.log(`  上位3頭精度:  ${(summary.top3Accuracy * 100).toFixed(1)}%`);
         console.log(`  順位相関:     ${summary.avgCorrelation.toFixed(3)}`);
         console.log('');
-        console.log('💡 詳細は `yarn start backtest --verbose` で確認できます');
+        console.log('💡 詳細は `bun start backtest --verbose` で確認できます');
       }
     } catch (error) {
       // バックテストのエラーはインポート全体を失敗させない
@@ -181,7 +181,7 @@ export class ImportData {
         if (result.improvement > 0) {
           console.log(`  予測改善:     +${result.improvement.toFixed(1)}%`);
           console.log('');
-          console.log('💡 `yarn start optimize-weights --output` で詳細確認');
+          console.log('💡 `bun start optimize-weights --output` で詳細確認');
         } else {
           console.log('  予測改善:     なし（現行重みが最適）');
         }

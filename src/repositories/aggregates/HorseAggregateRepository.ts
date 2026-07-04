@@ -3,12 +3,12 @@
  * トランザクション単位で馬＋血統関連を処理
  */
 
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import type { HorseImportData } from '../../types/HorseData';
 import type { TransactionResult, HorseInsertResult } from '../../types/RepositoryTypes';
 
 export class HorseAggregateRepository {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: Database) {}
 
   /**
    * 馬を血統情報と共に登録（トランザクション）

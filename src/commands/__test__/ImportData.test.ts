@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { DatabaseConnection } from '../../database/DatabaseConnection.js';
 import { ExtractedRaceData, HorseData } from '../../types/HorseData.js';
 import { writeFileSync, unlinkSync, existsSync } from 'node:fs';

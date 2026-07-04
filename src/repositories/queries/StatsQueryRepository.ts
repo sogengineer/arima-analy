@@ -2,12 +2,12 @@
  * 統計・スコアの取得リポジトリ
  */
 
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import type { BloodlineStats, HorseScoreRecord } from '../../types/RepositoryTypes';
 import type { DBSire } from '../../types/HorseData';
 
 export class StatsQueryRepository {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: Database) {}
 
   /**
    * 血統統計を取得

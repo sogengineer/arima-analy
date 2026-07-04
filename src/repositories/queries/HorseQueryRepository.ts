@@ -7,7 +7,7 @@
  * バッチ取得メソッド
  */
 
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import type {
   HorseDetail,
   HorseRaceResult,
@@ -17,7 +17,7 @@ import type {
 import type { DBHorse } from '../../types/HorseData';
 
 export class HorseQueryRepository {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: Database) {}
 
   /**
    * 馬詳細を取得（血統・調教師・馬主含む）

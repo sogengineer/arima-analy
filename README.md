@@ -19,13 +19,10 @@ TypeScriptで実装した有馬記念の馬券分析システムです。競走�
 ### 環境構築
 
 ```bash
-# 前提条件: Node.js 18以上, yarn
+# 前提条件: Bun 1.1以上
 
 # 依存パッケージのインストール
-yarn install
-
-# ビルド
-yarn build
+bun install
 ```
 
 ### 基本的な使い方
@@ -36,20 +33,20 @@ JRA出馬表URLからデータを取得します。
 
 ```bash
 # JRAからデータを取得して抽出
-yarn fetch-and-extract https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde1012024122206
+bun fetch-and-extract https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde1012024122206
 
 # データベースにインポート
-yarn start import-url data/horse-extracted-data.json
+bun start import-url data/horse-extracted-data.json
 ```
 
 #### 2. 予想実行
 
 ```bash
 # スコアリング分析
-yarn start score
+bun start score
 
 # 機械学習予測
-yarn start ml
+bun start ml
 ```
 
 ---
@@ -128,16 +125,16 @@ Claude Code を使用すると、対話形式で簡単に操作できます。
 
 ```
 1. データ取得
-   yarn fetch-and-extract <JRA URL>
+   bun fetch-and-extract <JRA URL>
    └─ HTML取得 → データ抽出 → JSON保存
 
 2. DB登録
-   yarn start import-url data/horse-extracted-data.json
+   bun start import-url data/horse-extracted-data.json
    └─ 馬情報・血統・前走データを登録
 
 3. 分析実行
-   yarn start score     # スコアリング
-   yarn start ml        # 機械学習予測
+   bun start score     # スコアリング
+   bun start ml        # 機械学習予測
 
 4. 最終予想
    └─ スコア × ML の両結果を総合判断

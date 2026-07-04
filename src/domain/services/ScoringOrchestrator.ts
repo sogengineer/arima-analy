@@ -18,7 +18,7 @@
  * ```
  */
 
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import { Horse } from '../entities/Horse';
 import { Jockey, JockeyBuilder } from '../entities/Jockey';
 import { Race } from '../entities/Race';
@@ -48,7 +48,7 @@ export class ScoringOrchestrator {
   private readonly raceRepo: RaceQueryRepository;
   private readonly jockeyRepo: JockeyQueryRepository;
 
-  constructor(db: Database.Database) {
+  constructor(db: Database) {
     this.horseRepo = new HorseQueryRepository(db);
     this.raceRepo = new RaceQueryRepository(db);
     this.jockeyRepo = new JockeyQueryRepository(db);

@@ -2,7 +2,7 @@
  * 騎手統計の取得リポジトリ
  */
 
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import type {
   JockeyVenueStats,
   JockeyOverallStats,
@@ -11,7 +11,7 @@ import type {
 import type { DBJockey, DBTrainer } from '../../types/HorseData';
 
 export class JockeyQueryRepository {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: Database) {}
 
   /**
    * 騎手の指定コース成績を取得（G1成績も含む）
