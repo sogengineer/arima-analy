@@ -17,8 +17,11 @@ export class ImportData {
   private readonly horseQueryRepo: HorseQueryRepository;
   private readonly statsQueryRepo: StatsQueryRepository;
 
-  constructor() {
-    this.connection = new DatabaseConnection();
+  /**
+   * @param dbPath テスト用にDBファイルパスを差し替え可能（省略時は本番DB ./arima.db）
+   */
+  constructor(dbPath?: string) {
+    this.connection = dbPath ? new DatabaseConnection(dbPath) : new DatabaseConnection();
     const db = this.connection.getConnection();
     this.horseAggregateRepo = new HorseAggregateRepository(db);
     this.raceAggregateRepo = new RaceAggregateRepository(db);

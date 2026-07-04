@@ -1,12 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { DatabaseConnection } from '../../database/DatabaseConnection.js';
-import { ExtractedRaceData, HorseData } from '../../types/HorseData.js';
+import { describe, it, expect, beforeEach, afterEach, spyOn, jest } from 'bun:test';
 import { writeFileSync, unlinkSync, existsSync } from 'node:fs';
+import { Database } from 'bun:sqlite';
+import { createTestDb, type TestDatabase } from '../../test/helpers/testDb';
+import { ExtractedRaceData, HorseData } from '../../types/HorseData.js';
 import { ImportData } from '../ImportData.js';
-
-// テスト用DBパス
-const TEST_DB_PATH = './test-import.db';
-const TEST_JSON_PATH = './test-extracted-data.json';
 
 /**
  * ImportData インポートテスト
@@ -160,30 +157,65 @@ function createPreviousRace(overrides: Partial<{
 }
 
 // ============================================
-// テストスイート
+// DB検証ヘルパー
 // ============================================
 
-// TODO: リファクタリング後のAPIに対応させる（DatabaseConnection → Repository経由）
-describe.skip('ImportData - インポート機能', () => {
-  let db: DatabaseConnection;
+function getRaceById(db: Database, id: number) {
+  return db.prepare(`
+    SELECT r.*, v.name AS venue_name
+    FROM races r
+    LEFT JOIN venues v ON r.venue_id = v.id
+    WHERE r.id = ?
+  `).get(id) as {
+    id: number;
+    race_date: string;
+    race_name: string;
+    race_class: string | null;
+    race_type: string | null;
+    distance: number;
+    track_condition: string | null;
+    venue_name: string;
+  } | undefined;
+}
+
+function getHorseWithBloodline(db: Database, id: number) {
+  return db.prepare(`
+    SELECT h.*,
+           s.name AS sire_name,
+           m.name AS mare_name,
+           t.name AS trainer_name,
+           o.name AS owner_name
+    FROM horses h
+    LEFT JOIN sires s ON h.sire_id = s.id
+    LEFT JOIN mares m ON h.mare_id = m.id
+    LEFT JOIN trainers t ON h.trainer_id = t.id
+    LEFT JOIN owners o ON h.owner_id = o.id
+    WHERE h.id = ?
+  `).get(id) as {
+    id: number;
+    name: string;
+    birth_year: number | null;
+    sex: string | null;
+    sire_name: string | null;
+    mare_name: string | null;
+    trainer_name: string | null;
+    owner_name: string | null;
+  } | undefined;
+}
+
+// ============================================
+// テストスイート（リポジトリ経由）
+// ============================================
+
+describe('ImportData - インポート機能', () => {
+  let testDb: TestDatabase;
 
   beforeEach(() => {
-    // テスト用DBを初期化
-    if (existsSync(TEST_DB_PATH)) {
-      unlinkSync(TEST_DB_PATH);
-    }
-    db = new DatabaseConnection(TEST_DB_PATH);
+    testDb = createTestDb('import');
   });
 
   afterEach(() => {
-    db.close();
-    // クリーンアップ
-    if (existsSync(TEST_DB_PATH)) {
-      unlinkSync(TEST_DB_PATH);
-    }
-    if (existsSync(TEST_JSON_PATH)) {
-      unlinkSync(TEST_JSON_PATH);
-    }
+    testDb.cleanup();
   });
 
   // ============================================
@@ -192,28 +224,7 @@ describe.skip('ImportData - インポート機能', () => {
 
   describe('新規インポート', () => {
     it('新規レースが正しく登録される', () => {
-      const raceData: ExtractedRaceData = createTestRaceData({
-        date: '2025-01-15',
-        venue: '東京',
-        raceNumber: 5,
-        raceName: '新規テストレース',
-        distance: 1600,
-        courseType: '芝',
-      });
-
-      writeFileSync(TEST_JSON_PATH, JSON.stringify(raceData));
-
-      // ImportData経由でインポート（DBを閉じるので別インスタンスで確認）
-      const command = new (class extends ImportData {
-        constructor() {
-          super();
-          // @ts-expect-error - プライベートプロパティにアクセス
-          this.db = new ArimaDatabase(TEST_DB_PATH);
-        }
-      })();
-
-      // 同期的に実行するためrunInTransactionを直接テスト
-      const result = db.insertRace({
+      const result = testDb.raceRepo.insertRace({
         raceDate: '2025-01-15',
         venue: '東京',
         raceNumber: 5,
@@ -225,14 +236,15 @@ describe.skip('ImportData - インポート機能', () => {
       expect(result.id).toBeGreaterThan(0);
       expect(result.updated).toBe(false);
 
-      const race = db.getRaceById(result.id);
+      const race = getRaceById(testDb.db, result.id);
       expect(race).toBeDefined();
       expect(race?.race_name).toBe('新規テストレース');
       expect(race?.distance).toBe(1600);
+      expect(race?.venue_name).toBe('東京');
     });
 
     it('新規馬が正しく登録される', () => {
-      const result = db.insertHorseWithBloodline({
+      const result = testDb.horseRepo.insertHorseWithBloodline({
         name: '新馬テスト',
         birthYear: 2021,
         sex: '牡',
@@ -246,7 +258,7 @@ describe.skip('ImportData - インポート機能', () => {
       expect(result.id).toBeGreaterThan(0);
       expect(result.updated).toBe(false);
 
-      const horse = db.getHorseWithBloodline(result.id);
+      const horse = getHorseWithBloodline(testDb.db, result.id);
       expect(horse).toBeDefined();
       expect(horse?.name).toBe('新馬テスト');
       expect(horse?.sire_name).toBe('ディープインパクト');
@@ -254,12 +266,30 @@ describe.skip('ImportData - インポート機能', () => {
     });
 
     it('新規騎手が正しく登録される', () => {
-      const jockeyId = db.getOrCreateJockey('武豊', 56);
-      expect(jockeyId).toBeGreaterThan(0);
+      // 騎手はエントリ登録時に getOrCreate される
+      testDb.horseRepo.insertHorseWithBloodline({ name: '騎手テスト馬', sire: '父', mare: '母' });
+      const race = testDb.raceRepo.insertRace({
+        raceDate: '2025-01-15',
+        venue: '中山',
+        raceNumber: 1,
+        raceName: '騎手テストレース',
+        distance: 1200,
+      });
 
-      const jockeys = db.getAllJockeys();
-      const jockey = jockeys.find(j => j.name === '武豊');
+      testDb.raceRepo.insertRaceEntry(race.id, {
+        horseName: '騎手テスト馬',
+        sireName: '父',
+        mareName: '母',
+        jockeyName: '武豊',
+        horseNumber: 1,
+        assignedWeight: 56,
+      });
+
+      const jockey = testDb.db.prepare(
+        'SELECT * FROM jockeys WHERE name = ?'
+      ).get('武豊') as { id: number; default_weight: number } | undefined;
       expect(jockey).toBeDefined();
+      expect(jockey?.id).toBeGreaterThan(0);
       expect(jockey?.default_weight).toBe(56);
     });
   });
@@ -272,7 +302,7 @@ describe.skip('ImportData - インポート機能', () => {
     describe('馬の更新（一致条件: 馬名 + 父 + 母）', () => {
       it('同じ馬名+父+母の場合は更新される', () => {
         // 初回登録
-        const first = db.insertHorseWithBloodline({
+        const first = testDb.horseRepo.insertHorseWithBloodline({
           name: '更新テスト馬',
           birthYear: 2020,
           sex: '牡',
@@ -283,7 +313,7 @@ describe.skip('ImportData - インポート機能', () => {
         expect(first.updated).toBe(false);
 
         // 同じ馬名+父+母で再登録 → 更新されるはず
-        const second = db.insertHorseWithBloodline({
+        const second = testDb.horseRepo.insertHorseWithBloodline({
           name: '更新テスト馬',
           birthYear: 2020, // 同じ
           sex: '牡',
@@ -295,20 +325,20 @@ describe.skip('ImportData - インポート機能', () => {
         expect(second.updated).toBe(true);
         expect(second.id).toBe(first.id); // 同じID
 
-        const horse = db.getHorseWithBloodline(second.id);
+        const horse = getHorseWithBloodline(testDb.db, second.id);
         expect(horse?.trainer_name).toBe('調教師B');
       });
 
       it('同じ馬名でも父が異なれば新規登録（同姓同名馬の区別）', () => {
         // 初回登録
-        const first = db.insertHorseWithBloodline({
+        const first = testDb.horseRepo.insertHorseWithBloodline({
           name: '同名馬',
           sire: '父馬X',
           mare: '母馬A',
         });
 
         // 同じ馬名だが父が異なる
-        const second = db.insertHorseWithBloodline({
+        const second = testDb.horseRepo.insertHorseWithBloodline({
           name: '同名馬',
           sire: '父馬Y', // 異なる父
           mare: '母馬A',
@@ -319,13 +349,13 @@ describe.skip('ImportData - インポート機能', () => {
       });
 
       it('同じ馬名でも母が異なれば新規登録', () => {
-        const first = db.insertHorseWithBloodline({
+        const first = testDb.horseRepo.insertHorseWithBloodline({
           name: '同名馬2',
           sire: '父馬A',
           mare: '母馬X',
         });
 
-        const second = db.insertHorseWithBloodline({
+        const second = testDb.horseRepo.insertHorseWithBloodline({
           name: '同名馬2',
           sire: '父馬A',
           mare: '母馬Y', // 異なる母
@@ -339,7 +369,7 @@ describe.skip('ImportData - インポート機能', () => {
     describe('レースの更新（一致条件: 開催日 + 会場 + レース番号）', () => {
       it('同じ開催日+会場+レース番号の場合は更新される', () => {
         // 初回登録
-        const first = db.insertRace({
+        const first = testDb.raceRepo.insertRace({
           raceDate: '2025-02-01',
           venue: '中山',
           raceNumber: 11,
@@ -350,7 +380,7 @@ describe.skip('ImportData - インポート機能', () => {
         expect(first.updated).toBe(false);
 
         // 同じ条件で再登録 → 更新
-        const second = db.insertRace({
+        const second = testDb.raceRepo.insertRace({
           raceDate: '2025-02-01',
           venue: '中山',
           raceNumber: 11,
@@ -363,13 +393,13 @@ describe.skip('ImportData - インポート機能', () => {
         expect(second.updated).toBe(true);
         expect(second.id).toBe(first.id);
 
-        const race = db.getRaceById(second.id);
+        const race = getRaceById(testDb.db, second.id);
         expect(race?.race_name).toBe('有馬記念（更新後）');
         expect(race?.track_condition).toBe('良');
       });
 
       it('異なるレース番号なら新規登録', () => {
-        const first = db.insertRace({
+        const first = testDb.raceRepo.insertRace({
           raceDate: '2025-02-01',
           venue: '中山',
           raceNumber: 10,
@@ -377,7 +407,7 @@ describe.skip('ImportData - インポート機能', () => {
           distance: 1800,
         });
 
-        const second = db.insertRace({
+        const second = testDb.raceRepo.insertRace({
           raceDate: '2025-02-01',
           venue: '中山',
           raceNumber: 11, // 異なるレース番号
@@ -390,7 +420,7 @@ describe.skip('ImportData - インポート機能', () => {
       });
 
       it('異なる会場なら新規登録', () => {
-        const first = db.insertRace({
+        const first = testDb.raceRepo.insertRace({
           raceDate: '2025-02-01',
           venue: '中山',
           raceNumber: 11,
@@ -398,7 +428,7 @@ describe.skip('ImportData - インポート機能', () => {
           distance: 2500,
         });
 
-        const second = db.insertRace({
+        const second = testDb.raceRepo.insertRace({
           raceDate: '2025-02-01',
           venue: '東京', // 異なる会場
           raceNumber: 11,
@@ -414,12 +444,12 @@ describe.skip('ImportData - インポート機能', () => {
     describe('出馬表の更新（一致条件: レースID + 馬ID）', () => {
       it('同じレース+馬の場合は更新される', () => {
         // 準備: 馬とレースを登録
-        const horse = db.insertHorseWithBloodline({
+        testDb.horseRepo.insertHorseWithBloodline({
           name: 'エントリテスト馬',
           sire: '父',
           mare: '母',
         });
-        const race = db.insertRace({
+        const race = testDb.raceRepo.insertRace({
           raceDate: '2025-03-01',
           venue: '阪神',
           raceNumber: 11,
@@ -428,7 +458,7 @@ describe.skip('ImportData - インポート機能', () => {
         });
 
         // 初回エントリ登録
-        const first = db.insertRaceEntry(race.id, {
+        const first = testDb.raceRepo.insertRaceEntry(race.id, {
           horseName: 'エントリテスト馬',
           sireName: '父',
           mareName: '母',
@@ -439,7 +469,7 @@ describe.skip('ImportData - インポート機能', () => {
         expect(first.updated).toBe(false);
 
         // 同じレース+馬で再登録 → 更新
-        const second = db.insertRaceEntry(race.id, {
+        const second = testDb.raceRepo.insertRaceEntry(race.id, {
           horseName: 'エントリテスト馬',
           sireName: '父',
           mareName: '母',
@@ -455,9 +485,9 @@ describe.skip('ImportData - インポート機能', () => {
 
       it('異なる馬なら新規登録（同じレース内）', () => {
         // 準備
-        const horse1 = db.insertHorseWithBloodline({ name: '馬1', sire: '父1', mare: '母1' });
-        const horse2 = db.insertHorseWithBloodline({ name: '馬2', sire: '父2', mare: '母2' });
-        const race = db.insertRace({
+        testDb.horseRepo.insertHorseWithBloodline({ name: '馬1', sire: '父1', mare: '母1' });
+        testDb.horseRepo.insertHorseWithBloodline({ name: '馬2', sire: '父2', mare: '母2' });
+        const race = testDb.raceRepo.insertRace({
           raceDate: '2025-03-02',
           venue: '京都',
           raceNumber: 11,
@@ -465,7 +495,7 @@ describe.skip('ImportData - インポート機能', () => {
           distance: 3000,
         });
 
-        const first = db.insertRaceEntry(race.id, {
+        const first = testDb.raceRepo.insertRaceEntry(race.id, {
           horseName: '馬1',
           sireName: '父1',
           mareName: '母1',
@@ -473,7 +503,7 @@ describe.skip('ImportData - インポート機能', () => {
           horseNumber: 1,
         });
 
-        const second = db.insertRaceEntry(race.id, {
+        const second = testDb.raceRepo.insertRaceEntry(race.id, {
           horseName: '馬2',
           sireName: '父2',
           mareName: '母2',
@@ -489,15 +519,15 @@ describe.skip('ImportData - インポート機能', () => {
     describe('レース結果の更新（一致条件: エントリID）', () => {
       it('同じエントリIDの場合は更新される', () => {
         // 準備
-        const horse = db.insertHorseWithBloodline({ name: '結果テスト馬', sire: '父', mare: '母' });
-        const race = db.insertRace({
+        testDb.horseRepo.insertHorseWithBloodline({ name: '結果テスト馬', sire: '父', mare: '母' });
+        const race = testDb.raceRepo.insertRace({
           raceDate: '2025-04-01',
           venue: '中山',
           raceNumber: 11,
           raceName: '結果テストレース',
           distance: 2500,
         });
-        const entry = db.insertRaceEntry(race.id, {
+        const entry = testDb.raceRepo.insertRaceEntry(race.id, {
           horseName: '結果テスト馬',
           sireName: '父',
           mareName: '母',
@@ -506,7 +536,7 @@ describe.skip('ImportData - インポート機能', () => {
         });
 
         // 初回結果登録
-        const first = db.insertRaceResult(entry.id, {
+        const first = testDb.raceRepo.insertRaceResult(entry.id, {
           finishPosition: 3,
           finishStatus: '完走',
           finishTime: '2:32.5',
@@ -514,7 +544,7 @@ describe.skip('ImportData - インポート機能', () => {
         expect(first.updated).toBe(false);
 
         // 同じエントリIDで再登録 → 更新
-        const second = db.insertRaceResult(entry.id, {
+        const second = testDb.raceRepo.insertRaceResult(entry.id, {
           finishPosition: 1, // 変更
           finishStatus: '完走',
           finishTime: '2:30.0', // 変更
@@ -528,162 +558,56 @@ describe.skip('ImportData - インポート機能', () => {
 
     describe('騎手の更新（getOrCreate）', () => {
       it('既存騎手はIDを返すだけで更新しない', () => {
-        // 初回登録
-        const firstId = db.getOrCreateJockey('テスト騎手', 54);
-        expect(firstId).toBeGreaterThan(0);
+        // 準備: 馬2頭と1レース
+        testDb.horseRepo.insertHorseWithBloodline({ name: '馬1', sire: '父1', mare: '母1' });
+        testDb.horseRepo.insertHorseWithBloodline({ name: '馬2', sire: '父2', mare: '母2' });
+        const race = testDb.raceRepo.insertRace({
+          raceDate: '2025-04-05',
+          venue: '中山',
+          raceNumber: 1,
+          raceName: '騎手更新テスト',
+          distance: 1200,
+        });
 
-        // 同じ名前で再度呼び出し（異なる体重）
-        const secondId = db.getOrCreateJockey('テスト騎手', 58);
-        expect(secondId).toBe(firstId); // 同じID
+        // 初回登録（斤量54）
+        const entry1 = testDb.raceRepo.insertRaceEntry(race.id, {
+          horseName: '馬1',
+          sireName: '父1',
+          mareName: '母1',
+          jockeyName: 'テスト騎手',
+          horseNumber: 1,
+          assignedWeight: 54,
+        });
 
-        // 体重は更新されない（getOrCreateなので）
-        const jockeys = db.getAllJockeys();
-        const jockey = jockeys.find(j => j.id === firstId);
-        expect(jockey?.default_weight).toBe(54); // 最初の値のまま
+        // 同じ騎手名で別エントリ登録（異なる斤量58）
+        const entry2 = testDb.raceRepo.insertRaceEntry(race.id, {
+          horseName: '馬2',
+          sireName: '父2',
+          mareName: '母2',
+          jockeyName: 'テスト騎手',
+          horseNumber: 2,
+          assignedWeight: 58,
+        });
+
+        expect(entry2.jockeyId).toBe(entry1.jockeyId); // 同じID
+
+        // 騎手は1件のみ、default_weightは更新されない（getOrCreateなので）
+        const jockeys = testDb.db.prepare(
+          'SELECT * FROM jockeys WHERE name = ?'
+        ).all('テスト騎手') as { id: number; default_weight: number }[];
+        expect(jockeys).toHaveLength(1);
+        expect(jockeys[0].default_weight).toBe(54); // 最初の値のまま
       });
     });
   });
 
   // ============================================
-  // 3. 前走データインポートテスト
-  // ============================================
-
-  describe('前走データインポート', () => {
-    it('前走レースが正しく登録される', () => {
-      // 前走データ付きの馬を作成
-      const raceData = createTestRaceData({
-        date: '2025-05-01',
-        venue: '東京',
-        raceNumber: 11,
-        raceName: '日本ダービー',
-        horses: [
-          createTestHorse({
-            name: '前走テスト馬',
-            sire: 'ダービー父',
-            mare: 'ダービー母',
-            horseNumber: 1,
-            previousRaces: [
-              createPreviousRace({
-                position: 'front',
-                date: '2025年4月13日',
-                track: '中山',
-                raceName: '皐月賞',
-                place: '2',
-                distance: '2000芝',
-              }),
-              createPreviousRace({
-                position: 'second',
-                date: '2025年3月2日',
-                track: '中山',
-                raceName: '弥生賞',
-                place: '1',
-                distance: '2000芝',
-              }),
-            ],
-          }),
-        ],
-      });
-
-      writeFileSync(TEST_JSON_PATH, JSON.stringify(raceData));
-
-      // 直接DBメソッドをテスト
-      const horse = db.insertHorseWithBloodline({
-        name: '前走テスト馬',
-        sire: 'ダービー父',
-        mare: 'ダービー母',
-      });
-
-      // 前走レース登録
-      const prevRace = db.insertRace({
-        raceDate: '2025-04-13',
-        venue: '中山',
-        raceNumber: 1,
-        raceName: '皐月賞',
-        raceType: '芝',
-        distance: 2000,
-      });
-
-      expect(prevRace.id).toBeGreaterThan(0);
-    });
-
-    it('同じレース内で異なる馬が同じ馬番でも登録できる（修正後）', () => {
-      // 修正後: UNIQUE(race_id, horse_id) に変更
-      // 同じレース内で異なる馬なら、同じ馬番でも登録可能
-
-      const horse1 = db.insertHorseWithBloodline({ name: '馬A', sire: '父A', mare: '母A' });
-      const horse2 = db.insertHorseWithBloodline({ name: '馬B', sire: '父B', mare: '母B' });
-
-      const race = db.insertRace({
-        raceDate: '2025-06-01',
-        venue: '阪神',
-        raceNumber: 1,
-        raceName: '馬番重複テスト',
-        distance: 1600,
-      });
-
-      // 馬Aを馬番1で登録
-      const entry1 = db.insertRaceEntry(race.id, {
-        horseName: '馬A',
-        sireName: '父A',
-        mareName: '母A',
-        jockeyName: '騎手1',
-        horseNumber: 1,
-      });
-
-      // 馬Bを同じ馬番1で登録（異なる馬なので成功する）
-      const entry2 = db.insertRaceEntry(race.id, {
-        horseName: '馬B',
-        sireName: '父B',
-        mareName: '母B',
-        jockeyName: '騎手2',
-        horseNumber: 1, // 同じ馬番だが、異なる馬なのでOK
-      });
-
-      expect(entry1.id).not.toBe(entry2.id);
-      expect(entry2.updated).toBe(false);
-    });
-
-    it('同じレースに同じ馬を再登録すると更新される', () => {
-      const horse = db.insertHorseWithBloodline({ name: '馬C', sire: '父C', mare: '母C' });
-
-      const race = db.insertRace({
-        raceDate: '2025-06-02',
-        venue: '東京',
-        raceNumber: 1,
-        raceName: '再登録テスト',
-        distance: 1800,
-      });
-
-      // 初回登録
-      const entry1 = db.insertRaceEntry(race.id, {
-        horseName: '馬C',
-        sireName: '父C',
-        mareName: '母C',
-        jockeyName: '騎手A',
-        horseNumber: 5,
-      });
-
-      // 同じ馬を同じレースに再登録 → 更新
-      const entry2 = db.insertRaceEntry(race.id, {
-        horseName: '馬C',
-        sireName: '父C',
-        mareName: '母C',
-        jockeyName: '騎手B', // 騎手変更
-        horseNumber: 5,
-      });
-
-      expect(entry2.id).toBe(entry1.id);
-      expect(entry2.updated).toBe(true);
-    });
-  });
-
-  // ============================================
-  // 4. エッジケーステスト
+  // 3. エッジケーステスト
   // ============================================
 
   describe('エッジケース', () => {
     it('空の前走データでもエラーにならない', () => {
-      const horse = db.insertHorseWithBloodline({
+      const horse = testDb.horseRepo.insertHorseWithBloodline({
         name: '前走なし馬',
         sire: '父',
         mare: '母',
@@ -694,13 +618,13 @@ describe.skip('ImportData - インポート機能', () => {
 
     it('NULLの血統情報でも馬を区別できる', () => {
       // 父母不明の馬
-      const first = db.insertHorseWithBloodline({
+      const first = testDb.horseRepo.insertHorseWithBloodline({
         name: '血統不明馬',
         // sire, mare なし
       });
 
       // 同じ名前で血統不明 → 更新
-      const second = db.insertHorseWithBloodline({
+      const second = testDb.horseRepo.insertHorseWithBloodline({
         name: '血統不明馬',
         sex: '牡', // 追加情報
       });
@@ -711,27 +635,42 @@ describe.skip('ImportData - インポート機能', () => {
 
     it('調教師の厩舎情報が更新されない（getOrCreate）', () => {
       // 初回（美浦）
-      const id1 = db.getOrCreateTrainer('テスト調教師', '美浦');
+      const horse1 = testDb.horseRepo.insertHorseWithBloodline({
+        name: '調教師テスト馬1',
+        sire: '父1',
+        mare: '母1',
+        trainer: 'テスト調教師',
+        trainerStable: '美浦',
+      });
 
-      // 同じ名前で異なる厩舎
-      const id2 = db.getOrCreateTrainer('テスト調教師', '栗東');
+      // 同じ調教師名で異なる厩舎
+      const horse2 = testDb.horseRepo.insertHorseWithBloodline({
+        name: '調教師テスト馬2',
+        sire: '父2',
+        mare: '母2',
+        trainer: 'テスト調教師',
+        trainerStable: '栗東',
+      });
 
-      expect(id2).toBe(id1);
+      expect(horse2.trainerId).toBe(horse1.trainerId); // 同じ調教師ID
 
-      const trainers = db.getAllTrainers();
-      const trainer = trainers.find(t => t.id === id1);
-      expect(trainer?.stable).toBe('美浦'); // 最初の値のまま
+      // 調教師は1件のみ、厩舎は最初の値のまま
+      const trainers = testDb.db.prepare(
+        'SELECT * FROM trainers WHERE name = ?'
+      ).all('テスト調教師') as { id: number; stable: string }[];
+      expect(trainers).toHaveLength(1);
+      expect(trainers[0].stable).toBe('美浦');
     });
   });
 
   // ============================================
-  // 5. 複数レース・過去レースのテスト
+  // 4. 複数レース・過去レースのテスト
   // ============================================
 
   describe('複数レース・過去レース', () => {
     it('一度登録した馬が別レースに出馬する場合、馬は再利用されエントリは新規', () => {
       // 馬を登録
-      const horse = db.insertHorseWithBloodline({
+      const horse = testDb.horseRepo.insertHorseWithBloodline({
         name: 'ディープインパクト産駒',
         sire: 'ディープインパクト',
         mare: '優秀牝馬',
@@ -740,7 +679,7 @@ describe.skip('ImportData - インポート機能', () => {
       expect(horse.updated).toBe(false);
 
       // 1つ目のレースに出走
-      const race1 = db.insertRace({
+      const race1 = testDb.raceRepo.insertRace({
         raceDate: '2025-04-01',
         venue: '阪神',
         raceNumber: 11,
@@ -749,7 +688,7 @@ describe.skip('ImportData - インポート機能', () => {
         raceType: '芝',
       });
 
-      const entry1 = db.insertRaceEntry(race1.id, {
+      const entry1 = testDb.raceRepo.insertRaceEntry(race1.id, {
         horseName: 'ディープインパクト産駒',
         sireName: 'ディープインパクト',
         mareName: '優秀牝馬',
@@ -760,7 +699,7 @@ describe.skip('ImportData - インポート機能', () => {
       expect(entry1.updated).toBe(false);
 
       // 2つ目のレースに同じ馬が出走
-      const race2 = db.insertRace({
+      const race2 = testDb.raceRepo.insertRace({
         raceDate: '2025-05-11',
         venue: '東京',
         raceNumber: 11,
@@ -770,7 +709,7 @@ describe.skip('ImportData - インポート機能', () => {
       });
 
       // 同じ馬を再登録 → 馬は更新（既存を使用）
-      const horse2 = db.insertHorseWithBloodline({
+      const horse2 = testDb.horseRepo.insertHorseWithBloodline({
         name: 'ディープインパクト産駒',
         sire: 'ディープインパクト',
         mare: '優秀牝馬',
@@ -780,7 +719,7 @@ describe.skip('ImportData - インポート機能', () => {
       expect(horse2.updated).toBe(true); // 更新扱い
 
       // 別レースへのエントリ → 新規
-      const entry2 = db.insertRaceEntry(race2.id, {
+      const entry2 = testDb.raceRepo.insertRaceEntry(race2.id, {
         horseName: 'ディープインパクト産駒',
         sireName: 'ディープインパクト',
         mareName: '優秀牝馬',
@@ -797,14 +736,14 @@ describe.skip('ImportData - インポート機能', () => {
       //          後日、馬Bの出馬表を登録時に同じ前走（皐月賞）が含まれる
 
       // === 馬Aの登録と前走登録 ===
-      const horseA = db.insertHorseWithBloodline({
+      testDb.horseRepo.insertHorseWithBloodline({
         name: '馬A',
         sire: '父A',
         mare: '母A',
       });
 
       // 前走レース（皐月賞）を登録
-      const prevRace = db.insertRace({
+      const prevRace = testDb.raceRepo.insertRace({
         raceDate: '2025-04-13',
         venue: '中山',
         raceNumber: 11,
@@ -816,7 +755,7 @@ describe.skip('ImportData - インポート機能', () => {
       expect(prevRace.updated).toBe(false); // 新規
 
       // 馬Aの皐月賞エントリ
-      const entryA = db.insertRaceEntry(prevRace.id, {
+      const entryA = testDb.raceRepo.insertRaceEntry(prevRace.id, {
         horseName: '馬A',
         sireName: '父A',
         mareName: '母A',
@@ -826,14 +765,14 @@ describe.skip('ImportData - インポート機能', () => {
       });
 
       // === 馬Bの登録と同じ前走登録 ===
-      const horseB = db.insertHorseWithBloodline({
+      testDb.horseRepo.insertHorseWithBloodline({
         name: '馬B',
         sire: '父B',
         mare: '母B',
       });
 
       // 同じ前走レース（皐月賞）を再登録 → 更新
-      const prevRace2 = db.insertRace({
+      const prevRace2 = testDb.raceRepo.insertRace({
         raceDate: '2025-04-13',
         venue: '中山',
         raceNumber: 11,
@@ -846,7 +785,7 @@ describe.skip('ImportData - インポート機能', () => {
       expect(prevRace2.updated).toBe(true); // 更新
 
       // 馬Bの皐月賞エントリ（新規）
-      const entryB = db.insertRaceEntry(prevRace.id, {
+      const entryB = testDb.raceRepo.insertRaceEntry(prevRace.id, {
         horseName: '馬B',
         sireName: '父B',
         mareName: '母B',
@@ -858,20 +797,20 @@ describe.skip('ImportData - インポート機能', () => {
       expect(entryB.updated).toBe(false); // 新規エントリ
 
       // レース情報が更新されていることを確認
-      const raceDb = db.getRaceById(prevRace.id);
+      const raceDb = getRaceById(testDb.db, prevRace.id);
       expect(raceDb?.track_condition).toBe('良');
     });
 
     it('同じ馬の同じ過去レースエントリは更新される', () => {
       // シナリオ: 馬Aの前走を2回登録（情報追加）
 
-      const horse = db.insertHorseWithBloodline({
+      testDb.horseRepo.insertHorseWithBloodline({
         name: '再登録馬',
         sire: '父',
         mare: '母',
       });
 
-      const race = db.insertRace({
+      const race = testDb.raceRepo.insertRace({
         raceDate: '2025-03-01',
         venue: '阪神',
         raceNumber: 11,
@@ -881,7 +820,7 @@ describe.skip('ImportData - インポート機能', () => {
       });
 
       // 初回エントリ
-      const entry1 = db.insertRaceEntry(race.id, {
+      const entry1 = testDb.raceRepo.insertRaceEntry(race.id, {
         horseName: '再登録馬',
         sireName: '父',
         mareName: '母',
@@ -890,7 +829,7 @@ describe.skip('ImportData - インポート機能', () => {
       });
 
       // 同じ馬・同じレースで再登録（情報更新）
-      const entry2 = db.insertRaceEntry(race.id, {
+      const entry2 = testDb.raceRepo.insertRaceEntry(race.id, {
         horseName: '再登録馬',
         sireName: '父',
         mareName: '母',
@@ -911,7 +850,7 @@ describe.skip('ImportData - インポート機能', () => {
       // 期待: 皐月賞レースは更新、馬Aの皐月賞エントリも更新
 
       // 馬Aを登録
-      const horseA = db.insertHorseWithBloodline({
+      testDb.horseRepo.insertHorseWithBloodline({
         name: 'サートゥルナーリア',
         sire: 'ロードカナロア',
         mare: 'シーザリオ',
@@ -919,7 +858,7 @@ describe.skip('ImportData - インポート機能', () => {
 
       // === ダービー出馬表登録時 ===
       // 前走として皐月賞を登録
-      const satsukisho1 = db.insertRace({
+      const satsukisho1 = testDb.raceRepo.insertRace({
         raceDate: '2025-04-13',
         venue: '中山',
         raceNumber: 11,
@@ -928,7 +867,7 @@ describe.skip('ImportData - インポート機能', () => {
         raceType: '芝',
       });
 
-      const satsukishoEntryA1 = db.insertRaceEntry(satsukisho1.id, {
+      const satsukishoEntryA1 = testDb.raceRepo.insertRaceEntry(satsukisho1.id, {
         horseName: 'サートゥルナーリア',
         sireName: 'ロードカナロア',
         mareName: 'シーザリオ',
@@ -938,14 +877,14 @@ describe.skip('ImportData - インポート機能', () => {
       });
 
       // 結果を登録
-      const result1 = db.insertRaceResult(satsukishoEntryA1.id, {
+      const result1 = testDb.raceRepo.insertRaceResult(satsukishoEntryA1.id, {
         finishPosition: 1,
         finishStatus: '完走',
       });
 
       // === 宝塚記念出馬表登録時 ===
       // 同じ馬Aの前走として同じ皐月賞を再登録
-      const satsukisho2 = db.insertRace({
+      const satsukisho2 = testDb.raceRepo.insertRace({
         raceDate: '2025-04-13',
         venue: '中山',
         raceNumber: 11,
@@ -956,7 +895,7 @@ describe.skip('ImportData - インポート機能', () => {
       });
 
       // 同じ馬の同じレースエントリを再登録
-      const satsukishoEntryA2 = db.insertRaceEntry(satsukisho2.id, {
+      const satsukishoEntryA2 = testDb.raceRepo.insertRaceEntry(satsukisho2.id, {
         horseName: 'サートゥルナーリア',
         sireName: 'ロードカナロア',
         mareName: 'シーザリオ',
@@ -967,7 +906,7 @@ describe.skip('ImportData - インポート機能', () => {
       });
 
       // 結果を再登録
-      const result2 = db.insertRaceResult(satsukishoEntryA2.id, {
+      const result2 = testDb.raceRepo.insertRaceResult(satsukishoEntryA2.id, {
         finishPosition: 1,
         finishStatus: '完走',
         finishTime: '1:58.1', // 追加情報
@@ -988,18 +927,18 @@ describe.skip('ImportData - インポート機能', () => {
       expect(result2.updated).toBe(true);
 
       // DB内の情報が更新されていることを確認
-      const raceDb = db.getRaceById(satsukisho1.id);
+      const raceDb = getRaceById(testDb.db, satsukisho1.id);
       expect(raceDb?.track_condition).toBe('良');
     });
 
     it('前走データの結果も更新される', () => {
-      const horse = db.insertHorseWithBloodline({
+      testDb.horseRepo.insertHorseWithBloodline({
         name: '結果更新馬',
         sire: '父',
         mare: '母',
       });
 
-      const race = db.insertRace({
+      const race = testDb.raceRepo.insertRace({
         raceDate: '2025-02-15',
         venue: '東京',
         raceNumber: 11,
@@ -1008,7 +947,7 @@ describe.skip('ImportData - インポート機能', () => {
         raceType: 'ダート',
       });
 
-      const entry = db.insertRaceEntry(race.id, {
+      const entry = testDb.raceRepo.insertRaceEntry(race.id, {
         horseName: '結果更新馬',
         sireName: '父',
         mareName: '母',
@@ -1017,14 +956,14 @@ describe.skip('ImportData - インポート機能', () => {
       });
 
       // 初回結果登録
-      const result1 = db.insertRaceResult(entry.id, {
+      const result1 = testDb.raceRepo.insertRaceResult(entry.id, {
         finishPosition: 3,
         finishStatus: '完走',
       });
       expect(result1.updated).toBe(false);
 
       // 同じエントリで結果を再登録（詳細追加）
-      const result2 = db.insertRaceResult(entry.id, {
+      const result2 = testDb.raceRepo.insertRaceResult(entry.id, {
         finishPosition: 3,
         finishStatus: '完走',
         finishTime: '1:34.5', // 追加
@@ -1034,16 +973,50 @@ describe.skip('ImportData - インポート機能', () => {
       expect(result2.id).toBe(result1.id);
       expect(result2.updated).toBe(true);
     });
+
+    it('同じレース内で異なる馬が同じ馬番でも登録できる（UNIQUE(race_id, horse_id)）', () => {
+      testDb.horseRepo.insertHorseWithBloodline({ name: '馬A', sire: '父A', mare: '母A' });
+      testDb.horseRepo.insertHorseWithBloodline({ name: '馬B', sire: '父B', mare: '母B' });
+
+      const race = testDb.raceRepo.insertRace({
+        raceDate: '2025-06-01',
+        venue: '阪神',
+        raceNumber: 1,
+        raceName: '馬番重複テスト',
+        distance: 1600,
+      });
+
+      // 馬Aを馬番1で登録
+      const entry1 = testDb.raceRepo.insertRaceEntry(race.id, {
+        horseName: '馬A',
+        sireName: '父A',
+        mareName: '母A',
+        jockeyName: '騎手1',
+        horseNumber: 1,
+      });
+
+      // 馬Bを同じ馬番1で登録（異なる馬なので成功する）
+      const entry2 = testDb.raceRepo.insertRaceEntry(race.id, {
+        horseName: '馬B',
+        sireName: '父B',
+        mareName: '母B',
+        jockeyName: '騎手2',
+        horseNumber: 1, // 同じ馬番だが、異なる馬なのでOK
+      });
+
+      expect(entry1.id).not.toBe(entry2.id);
+      expect(entry2.updated).toBe(false);
+    });
   });
 
   // ============================================
-  // 6. 統合テスト
+  // 5. 統合テスト
   // ============================================
 
   describe('統合テスト', () => {
     it('完全なレースデータをインポートして再インポートで更新される', () => {
       // 初回インポート
-      const race1 = db.insertRace({
+      const race1 = testDb.raceRepo.insertRace({
         raceDate: '2025-12-28',
         venue: '中山',
         raceNumber: 11,
@@ -1054,7 +1027,7 @@ describe.skip('ImportData - インポート機能', () => {
         totalHorses: 16,
       });
 
-      const horse1 = db.insertHorseWithBloodline({
+      const horse1 = testDb.horseRepo.insertHorseWithBloodline({
         name: 'イクイノックス',
         birthYear: 2019,
         sex: '牡',
@@ -1064,7 +1037,7 @@ describe.skip('ImportData - インポート機能', () => {
         trainerStable: '美浦',
       });
 
-      const entry1 = db.insertRaceEntry(race1.id, {
+      const entry1 = testDb.raceRepo.insertRaceEntry(race1.id, {
         horseName: 'イクイノックス',
         sireName: 'キタサンブラック',
         mareName: 'シャトーブランシュ',
@@ -1077,7 +1050,7 @@ describe.skip('ImportData - インポート機能', () => {
       });
 
       // 再インポート（情報更新）
-      const race2 = db.insertRace({
+      const race2 = testDb.raceRepo.insertRace({
         raceDate: '2025-12-28',
         venue: '中山',
         raceNumber: 11,
@@ -1088,7 +1061,7 @@ describe.skip('ImportData - インポート機能', () => {
         totalHorses: 16,
       });
 
-      const horse2 = db.insertHorseWithBloodline({
+      const horse2 = testDb.horseRepo.insertHorseWithBloodline({
         name: 'イクイノックス',
         birthYear: 2019,
         sex: '牡',
@@ -1099,7 +1072,7 @@ describe.skip('ImportData - インポート機能', () => {
         owner: '（有）シルクレーシング', // 追加
       });
 
-      const entry2 = db.insertRaceEntry(race2.id, {
+      const entry2 = testDb.raceRepo.insertRaceEntry(race2.id, {
         horseName: 'イクイノックス',
         sireName: 'キタサンブラック',
         mareName: 'シャトーブランシュ',
@@ -1120,12 +1093,175 @@ describe.skip('ImportData - インポート機能', () => {
       expect(entry2.updated).toBe(true);
 
       // DB内容確認
-      const raceDb = db.getRaceById(race1.id);
+      const raceDb = getRaceById(testDb.db, race1.id);
       expect(raceDb?.track_condition).toBe('稍重');
 
-      const horseDb = db.getHorseWithBloodline(horse1.id);
+      const horseDb = getHorseWithBloodline(testDb.db, horse1.id);
       expect(horseDb?.owner_name).toBe('（有）シルクレーシング');
     });
   });
 });
 
+// ============================================
+// テストスイート（ImportData経由のE2E）
+// ============================================
+
+describe('ImportData - importExtractedJSON E2E', () => {
+  const E2E_DB_PATH = './test-importdata-e2e.db';
+  const E2E_JSON_PATH = './test-importdata-e2e.json';
+
+  beforeEach(() => {
+    if (existsSync(E2E_DB_PATH)) {
+      unlinkSync(E2E_DB_PATH);
+    }
+    // インポート時の大量のコンソール出力を抑制
+    spyOn(console, 'log').mockImplementation(() => {});
+    spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    for (const path of [E2E_DB_PATH, E2E_JSON_PATH]) {
+      if (existsSync(path)) {
+        unlinkSync(path);
+      }
+    }
+  });
+
+  it('抽出JSONからレース・馬・出馬表・前走データが登録される', async () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+
+    const raceData = createTestRaceData({
+      date: '2025-12-28',
+      venue: '中山',
+      raceNumber: 11,
+      raceName: '有馬記念',
+      distance: 2500,
+      courseType: '芝',
+      horses: [
+        createTestHorse({
+          name: 'E2Eテスト馬',
+          age: 4,
+          sex: '牝',
+          sire: 'E2E父',
+          mare: 'E2E母',
+          horseNumber: 1,
+          previousRaces: [
+            createPreviousRace({
+              raceName: '皐月賞',
+              date: '2025年4月13日',
+              track: '中山',
+              place: '2',
+              distance: '2000芝',
+            }),
+          ],
+        }),
+      ],
+    });
+    writeFileSync(E2E_JSON_PATH, JSON.stringify(raceData));
+
+    const command = new ImportData(E2E_DB_PATH);
+    await command.importExtractedJSON(E2E_JSON_PATH);
+
+    expect(errorSpy).not.toHaveBeenCalled();
+
+    // importExtractedJSONは接続を閉じるので、別接続で検証
+    const db = new Database(E2E_DB_PATH, { readonly: true });
+    try {
+      // レース
+      const race = db.prepare(
+        "SELECT * FROM races WHERE race_name = '有馬記念'"
+      ).get() as { id: number; race_date: string; distance: number; race_type: string };
+      expect(race).toBeDefined();
+      expect(race.race_date).toBe('2025-12-28');
+      expect(race.distance).toBe(2500);
+      expect(race.race_type).toBe('芝');
+
+      // 馬（生年 = 開催年 − 馬齢）
+      const horse = db.prepare(
+        "SELECT * FROM horses WHERE name = 'E2Eテスト馬'"
+      ).get() as { id: number; sex: string; birth_year: number };
+      expect(horse).toBeDefined();
+      expect(horse.sex).toBe('牝');
+      expect(horse.birth_year).toBe(2021); // 2025 - 4
+
+      // 出馬表
+      const entry = db.prepare(
+        'SELECT * FROM race_entries WHERE race_id = ? AND horse_id = ?'
+      ).get(race.id, horse.id) as { id: number; horse_number: number; win_odds: number };
+      expect(entry).toBeDefined();
+      expect(entry.horse_number).toBe(1);
+      expect(entry.win_odds).toBe(5.0);
+
+      // 前走レースと結果
+      const prevRace = db.prepare(
+        "SELECT * FROM races WHERE race_name = '皐月賞'"
+      ).get() as { id: number; race_date: string; distance: number };
+      expect(prevRace).toBeDefined();
+      expect(prevRace.race_date).toBe('2025-04-13');
+      expect(prevRace.distance).toBe(2000);
+
+      const prevEntry = db.prepare(
+        'SELECT * FROM race_entries WHERE race_id = ? AND horse_id = ?'
+      ).get(prevRace.id, horse.id) as { id: number };
+      expect(prevEntry).toBeDefined();
+
+      const prevResult = db.prepare(
+        'SELECT * FROM race_results WHERE entry_id = ?'
+      ).get(prevEntry.id) as { finish_position: number };
+      expect(prevResult).toBeDefined();
+      expect(prevResult.finish_position).toBe(2);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('同じJSONの再インポートで重複せず更新される', async () => {
+    spyOn(console, 'error').mockImplementation(() => {});
+
+    const raceData = createTestRaceData({
+      date: '2025-12-28',
+      venue: '中山',
+      raceNumber: 11,
+      raceName: '有馬記念',
+      trackCondition: '良',
+      horses: [createTestHorse({ name: '再インポート馬', sire: '父R', mare: '母R', winOdds: 1.5 })],
+    });
+    writeFileSync(E2E_JSON_PATH, JSON.stringify(raceData));
+
+    // 初回インポート（接続が閉じられるためインスタンスは使い捨て）
+    await new ImportData(E2E_DB_PATH).importExtractedJSON(E2E_JSON_PATH);
+
+    // 情報を変更して再インポート
+    raceData.raceInfo.trackCondition = '稍重';
+    raceData.horses[0].raceInfo.winOdds = 1.3;
+    writeFileSync(E2E_JSON_PATH, JSON.stringify(raceData));
+
+    await new ImportData(E2E_DB_PATH).importExtractedJSON(E2E_JSON_PATH);
+
+    const db = new Database(E2E_DB_PATH, { readonly: true });
+    try {
+      // レースは1件のまま、内容は更新
+      const races = db.prepare(
+        "SELECT * FROM races WHERE race_name = '有馬記念'"
+      ).all() as { id: number; track_condition: string }[];
+      expect(races).toHaveLength(1);
+      expect(races[0].track_condition).toBe('稍重');
+
+      // 馬も1頭のまま
+      const horses = db.prepare(
+        "SELECT * FROM horses WHERE name = '再インポート馬'"
+      ).all() as { id: number }[];
+      expect(horses).toHaveLength(1);
+
+      // エントリも1件のまま、オッズは更新
+      const entries = db.prepare(
+        'SELECT * FROM race_entries WHERE race_id = ? AND horse_id = ?'
+      ).all(races[0].id, horses[0].id) as { win_odds: number }[];
+      expect(entries).toHaveLength(1);
+      expect(entries[0].win_odds).toBe(1.3);
+    } finally {
+      db.close();
+    }
+  });
+});
