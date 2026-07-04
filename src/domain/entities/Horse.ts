@@ -256,7 +256,7 @@ export class Horse {
 
     const validResults = similarDistanceResults.filter(r => r.finishPosition != null);
     const wins = validResults.filter(r => r.isWin()).length;
-    const places = validResults.filter(r => r.isShow()).length;
+    const places = validResults.filter(r => r.isPlace()).length;
 
     if (validResults.length === 0) return 0;
 

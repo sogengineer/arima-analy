@@ -75,7 +75,7 @@ export class HorseDataExtractor {
         const basicInfo = this.parseBasicInfo(horseData);
         const bloodline = options.includeBloodline !== false ? this.parseBloodline(horseData) : this.getEmptyBloodline();
         const jockey = this.parseJockeyInfo(jockeyData);
-        const raceInfo = this.parseRaceInfo_Horse(horseData, horseNumber);
+        const raceInfo = this.parseRaceInfo_Horse(horseData, horseNumber, jockey.weight);
         const record = this.parseRaceRecord(horseData);
         const previousRaces = options.includePreviousRaces !== false ?
           this.parsePreviousRaces(pastRacesData, options.maxPreviousRaces || 4) : [];
@@ -112,10 +112,21 @@ export class HorseDataExtractor {
     const divisionMatch = horseData.match(/<span class="division">\((.*?)\)<\/span>/);
     const trainerDivision = divisionMatch ? divisionMatch[1].trim() as '美浦' | '栗東' : undefined;
 
+    // 性別・年齢（例: "牡3" "牝4" "セ5"）。class="age" ブロックを優先し、
+    // 見つからない場合は馬データ全体から検索。取得できなければ従来のデフォルト値
+    const ageBlockMatch = horseData.match(/<p class="age">(.*?)<\/p>/);
+    const ageSexMatch = (ageBlockMatch ? ageBlockMatch[1] : horseData).match(/(牡|牝|セン|セ|騸)\s*(\d{1,2})/);
+    const sex: '牡' | '牝' | '騸' =
+      ageSexMatch == null ? '牡'
+      : ageSexMatch[1] === '牡' ? '牡'
+      : ageSexMatch[1] === '牝' ? '牝'
+      : '騸';
+    const age = ageSexMatch ? Number.parseInt(ageSexMatch[2]) : 2;
+
     return {
       name,
-      age: 2, // JRAの2歳戦と仮定
-      sex: '牡', // デフォルト値、実際にはHTMLから解析
+      age,
+      sex,
       color: '',
       ownerName,
       breederName,
@@ -147,7 +158,7 @@ export class HorseDataExtractor {
     return { name, weight };
   }
 
-  private parseRaceInfo_Horse(horseData: string, horseNumber: number): RaceInfo {
+  private parseRaceInfo_Horse(horseData: string, horseNumber: number, assignedWeight: number): RaceInfo {
     const oddsMatch = horseData.match(/<span class="num"><strong.*?>([\d.]+)<\/strong>/);
     const winOdds = oddsMatch ? Number.parseFloat(oddsMatch[1]) : 0;
 
@@ -157,7 +168,7 @@ export class HorseDataExtractor {
     return {
       frameNumber: Math.ceil(horseNumber / 2), // 簡易計算
       horseNumber,
-      assignedWeight: 0, // jockeyDataから取得
+      assignedWeight,
       winOdds,
       popularity
     };

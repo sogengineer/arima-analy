@@ -66,7 +66,7 @@ export class ImportData {
           // 2-1. 馬を登録
           const { id: horseId, updated } = this.horseAggregateRepo.insertHorseWithBloodline({
             name: horse.basicInfo.name,
-            birthYear: this.calculateBirthYear(horse.basicInfo.age),
+            birthYear: this.calculateBirthYear(horse.basicInfo.age, raceInfo.date),
             sex: horse.basicInfo.sex,
             sire: horse.bloodline.sire,
             mare: horse.bloodline.mare,
@@ -179,7 +179,7 @@ export class ImportData {
         console.log(`  学習データ:   ${result.dataCount}件`);
 
         if (result.improvement > 0) {
-          console.log(`  予測改善:     +${(result.improvement * 100).toFixed(1)}%`);
+          console.log(`  予測改善:     +${result.improvement.toFixed(1)}%`);
           console.log('');
           console.log('💡 `yarn start optimize-weights --output` で詳細確認');
         } else {
@@ -288,9 +288,17 @@ export class ImportData {
     return undefined;
   }
 
-  private calculateBirthYear(age: number): number {
-    const currentYear = new Date().getFullYear();
-    return currentYear - age;
+  /**
+   * 馬齢から生年を計算
+   *
+   * @remarks
+   * 馬齢はレース開催時点の年齢なので、開催年を基準に計算する。
+   * （現在年基準だと過去レースのインポートで生年がずれる）
+   */
+  private calculateBirthYear(age: number, raceDate?: string): number {
+    const raceYear = raceDate?.match(/^(\d{4})/);
+    const baseYear = raceYear ? Number(raceYear[1]) : new Date().getFullYear();
+    return baseYear - age;
   }
 
   async extractHorseDataFromHTML(htmlFilePath: string): Promise<void> {
