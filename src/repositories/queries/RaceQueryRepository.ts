@@ -3,12 +3,12 @@
  * JOINでまとめて取得
  */
 
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import type { RaceWithVenue, EntryWithDetails } from '../../types/RepositoryTypes';
 import type { DBRace, DBVenue } from '../../types/HorseData';
 
 export class RaceQueryRepository {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: Database) {}
 
   /**
    * レースを取得（会場名付き）

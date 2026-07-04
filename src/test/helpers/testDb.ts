@@ -6,7 +6,7 @@
  * 各テストスイートで独立したDBを使用することで、テスト間の干渉を防ぐ。
  */
 
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import { readFileSync, existsSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export interface TestDatabase {
-  db: Database.Database;
+  db: Database;
   horseRepo: HorseAggregateRepository;
   raceRepo: RaceAggregateRepository;
   close: () => void;
@@ -41,7 +41,7 @@ export function createTestDb(name: string): TestDatabase {
   const db = new Database(dbPath);
 
   // 外部キー制約を有効化
-  db.pragma('foreign_keys = ON');
+  db.exec('PRAGMA foreign_keys = ON');
 
   // スキーマを読み込んで初期化
   const schemaPath = join(__dirname, '../../database/schema.sql');

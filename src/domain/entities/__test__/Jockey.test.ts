@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { Jockey, JockeyBuilder } from '../Jockey';
 import type { JockeyVenueStats, JockeyOverallStats, JockeyTrainerComboStats } from '../../../types/RepositoryTypes';
 import { JOCKEY_SCORE_WEIGHTS, RELIABILITY_THRESHOLDS } from '../../../constants/ScoringConstants';

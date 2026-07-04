@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { ScoreComponents, ScoreComponentsData } from '../ScoreComponents';
 import { SCORE_WEIGHTS } from '../../../constants/ScoringConstants';
 

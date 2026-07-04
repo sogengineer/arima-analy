@@ -401,16 +401,16 @@ src/commands/Backtest.ts
 
 ```bash
 # 重賞のみでバックテスト
-yarn start backtest
+bun start backtest
 
 # 全レース対象
-yarn start backtest --all
+bun start backtest --all
 
 # 詳細表示
-yarn start backtest --verbose
+bun start backtest --verbose
 
 # レース数制限
-yarn start backtest --limit 10
+bun start backtest --limit 10
 ```
 
 ### 評価指標
@@ -453,13 +453,13 @@ src/models/MachineLearningModel.ts (optimizeWeights メソッド)
 
 ```bash
 # 基本実行
-yarn start optimize-weights
+bun start optimize-weights
 
 # 正則化パラメータ調整（デフォルト0.1）
-yarn start optimize-weights --lambda 0.05
+bun start optimize-weights --lambda 0.05
 
 # 最適化重みをコード形式で出力
-yarn start optimize-weights --output
+bun start optimize-weights --output
 ```
 
 ### アルゴリズム

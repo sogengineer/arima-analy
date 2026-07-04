@@ -49,10 +49,10 @@ CLIから直接実行する場合は、以下のコマンドを使用します�
 
 ```bash
 # ビルド後
-yarn start <コマンド>
+bun start <コマンド>
 
 # 開発モード
-yarn dev <コマンド>
+bun dev <コマンド>
 ```
 
 ---
@@ -64,7 +64,7 @@ yarn dev <コマンド>
 JRA公式サイトの出馬表ページからHTMLを取得します。
 
 ```bash
-yarn start fetch-jra https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde1012024122206
+bun start fetch-jra https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde1012024122206
 ```
 
 **オプション:**
@@ -79,7 +79,7 @@ yarn start fetch-jra https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde10120
 HTMLファイルから馬データを抽出し、データベースに登録します。
 
 ```bash
-yarn start extract-html data/jra-page.html
+bun start extract-html data/jra-page.html
 ```
 
 ---
@@ -89,7 +89,7 @@ yarn start extract-html data/jra-page.html
 HTMLファイルから馬データを抽出し、JSONファイルに保存します（DB登録なし）。
 
 ```bash
-yarn start extract-html-only data/jra-page.html
+bun start extract-html-only data/jra-page.html
 ```
 
 **オプション:**
@@ -104,7 +104,7 @@ yarn start extract-html-only data/jra-page.html
 JRA URLからHTMLを取得し、データを自動抽出します（一括処理）。
 
 ```bash
-yarn start fetch-and-extract https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde1012024122206
+bun start fetch-and-extract https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde1012024122206
 ```
 
 **オプション:**
@@ -122,7 +122,7 @@ yarn start fetch-and-extract https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01
 JSONファイルからデータをインポートします。
 
 ```bash
-yarn start import-json data/sample_horses.json
+bun start import-json data/sample_horses.json
 ```
 
 ---
@@ -132,7 +132,7 @@ yarn start import-json data/sample_horses.json
 抽出済みJSONファイルをデータベースにインポートします。
 
 ```bash
-yarn start import-url data/horse-extracted-data.json
+bun start import-url data/horse-extracted-data.json
 ```
 
 ---
@@ -142,12 +142,12 @@ yarn start import-url data/horse-extracted-data.json
 馬を手動で登録します。
 
 ```bash
-yarn start add-horse "馬名,生年,性別,父,母,母父,調教師"
+bun start add-horse "馬名,生年,性別,父,母,母父,調教師"
 ```
 
 **例:**
 ```bash
-yarn start add-horse "テスト馬,2020,牡,ディープインパクト,母馬名,キングカメハメハ,調教師名"
+bun start add-horse "テスト馬,2020,牡,ディープインパクト,母馬名,キングカメハメハ,調教師名"
 ```
 
 ---
@@ -159,7 +159,7 @@ yarn start add-horse "テスト馬,2020,牡,ディープインパクト,母馬�
 登録済み馬の一覧を表示します。手動入力のガイドも表示されます。
 
 ```bash
-yarn start horses
+bun start horses
 ```
 
 **出力例:**
@@ -177,7 +177,7 @@ ID | 馬名           | 生年 | 性別 | 父            | 調教師
 登録済み騎手の一覧を表示します。
 
 ```bash
-yarn start jockeys
+bun start jockeys
 ```
 
 ---
@@ -187,7 +187,7 @@ yarn start jockeys
 登録済み馬の一覧を血統情報付きで表示します。
 
 ```bash
-yarn start show-horses
+bun start show-horses
 ```
 
 ---
@@ -197,7 +197,7 @@ yarn start show-horses
 種牡馬別の成績統計を表示します。
 
 ```bash
-yarn start show-sires
+bun start show-sires
 ```
 
 ---
@@ -210,10 +210,10 @@ yarn start show-sires
 
 ```bash
 # 全馬の戦績
-yarn start performance
+bun start performance
 
 # 特定の馬
-yarn start performance アーモンドアイ
+bun start performance アーモンドアイ
 ```
 
 **分析内容:**
@@ -228,7 +228,7 @@ yarn start performance アーモンドアイ
 馬場状態別の成績分析を実行します。
 
 ```bash
-yarn start track-analysis
+bun start track-analysis
 ```
 
 **分析内容:**
@@ -244,10 +244,10 @@ yarn start track-analysis
 
 ```bash
 # 特定会場の分析
-yarn start course-analysis 中山
+bun start course-analysis 中山
 
 # 全会場の分析
-yarn start course-analysis
+bun start course-analysis
 ```
 
 **分析内容:**
@@ -262,7 +262,7 @@ yarn start course-analysis
 10要素スコアリングモデルで総合評価を算出します。
 
 ```bash
-yarn start score
+bun start score
 ```
 
 **オプション:**
@@ -290,7 +290,7 @@ yarn start score
 統計ベースの予測を実行します（旧版）。
 
 ```bash
-yarn start predict
+bun start predict
 ```
 
 **予測内容:**
@@ -306,7 +306,7 @@ yarn start predict
 機械学習モデルで予測を実行します。
 
 ```bash
-yarn start ml
+bun start ml
 ```
 
 **オプション:**

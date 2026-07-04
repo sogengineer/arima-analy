@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { createTestDb, seedTestData, type TestDatabase } from '../../test/helpers/testDb';
 import { ScoringOrchestrator } from '../../domain/services/ScoringOrchestrator';
 import { RaceQueryRepository } from '../../repositories/queries/RaceQueryRepository';

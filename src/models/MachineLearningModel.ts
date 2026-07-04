@@ -322,8 +322,7 @@ export class MachineLearningModel {
     const optimizedWeights = this.ridgeRegression(features, labels, lambda);
 
     // 重みを正規化（合計1.0に）
-    const sum = optimizedWeights.reduce((a, b) => a + Math.abs(b), 0);
-    const normalizedWeights = optimizedWeights.map(w => Math.max(0, w) / sum);
+    const normalizedWeights = this.normalizeWeights(optimizedWeights);
 
     this.learnedWeights = normalizedWeights;
 
@@ -372,6 +371,19 @@ export class MachineLearningModel {
     }
 
     return { features, labels };
+  }
+
+  /**
+   * 重みを正規化（負の重みは0にクリップし、合計1.0に）
+   *
+   * @remarks
+   * 全重みが0以下になった場合は現在のスコアリング重みにフォールバック。
+   */
+  private normalizeWeights(weights: number[]): number[] {
+    const clipped = weights.map(w => Math.max(0, w));
+    const sum = clipped.reduce((a, b) => a + b, 0);
+    if (sum <= 0) return this.getCurrentWeights();
+    return clipped.map(w => w / sum);
   }
 
   /**
@@ -773,7 +785,7 @@ export class MachineLearningModel {
     console.log('馬名              スコア順  ML順位  ML確率  判定');
     console.log('-'.repeat(60));
 
-    const scoreRanking = scoringResults
+    const scoreRanking = [...scoringResults]
       .sort((a, b) => b.totalScore - a.totalScore)
       .map((s, i) => ({ ...s, scoreRank: i + 1 }));
 
@@ -855,8 +867,7 @@ export class MachineLearningModel {
       const optimizedWeights = this.ridgeRegression(features, labels, lambda);
 
       // 重みを正規化
-      const sum = optimizedWeights.reduce((a, b) => a + Math.abs(b), 0);
-      const normalizedWeights = optimizedWeights.map(w => Math.max(0, w) / sum);
+      const normalizedWeights = this.normalizeWeights(optimizedWeights);
 
       // 改善度を計算
       const currentWeights = this.getCurrentWeights();

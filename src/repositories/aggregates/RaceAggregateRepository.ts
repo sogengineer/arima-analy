@@ -3,7 +3,7 @@
  * トランザクション単位でレース＋出馬表＋結果を処理
  */
 
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import type {
   RaceImportData,
   EntryImportData,
@@ -17,7 +17,7 @@ import type {
 } from '../../types/RepositoryTypes';
 
 export class RaceAggregateRepository {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: Database) {}
 
   /**
    * レースを登録（トランザクション）

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, spyOn, jest } from 'bun:test';
 import { createTestDb, seedTestData, type TestDatabase } from '../../test/helpers/testDb';
 import { Backtest } from '../Backtest';
 
@@ -68,12 +68,12 @@ describe('Backtest E2E', () => {
   describe('execute', () => {
     beforeEach(() => {
       // コンソール出力を抑制
-      vi.spyOn(console, 'log').mockImplementation(() => {});
-      vi.spyOn(console, 'error').mockImplementation(() => {});
+      spyOn(console, 'log').mockImplementation(() => {});
+      spyOn(console, 'error').mockImplementation(() => {});
     });
 
     afterEach(() => {
-      vi.restoreAllMocks();
+      jest.restoreAllMocks();
     });
 
     it('重賞限定でバックテストを実行', async () => {
@@ -83,7 +83,7 @@ describe('Backtest E2E', () => {
       backtest = new Backtest(testDb.db);
 
       // エラーなく完了すること
-      await expect(backtest.execute({ gradeOnly: true })).resolves.not.toThrow();
+      await expect(backtest.execute({ gradeOnly: true })).resolves.toBeUndefined();
     });
 
     it('全レースでバックテストを実行', async () => {
@@ -91,7 +91,7 @@ describe('Backtest E2E', () => {
 
       backtest = new Backtest(testDb.db);
 
-      await expect(backtest.execute({ gradeOnly: false })).resolves.not.toThrow();
+      await expect(backtest.execute({ gradeOnly: false })).resolves.toBeUndefined();
     });
 
     it('limit指定でレース数を制限', async () => {
@@ -99,7 +99,7 @@ describe('Backtest E2E', () => {
 
       backtest = new Backtest(testDb.db);
 
-      await expect(backtest.execute({ limit: 5 })).resolves.not.toThrow();
+      await expect(backtest.execute({ limit: 5 })).resolves.toBeUndefined();
     });
 
     it('verbose=trueで詳細表示', async () => {
@@ -107,7 +107,7 @@ describe('Backtest E2E', () => {
 
       backtest = new Backtest(testDb.db);
 
-      await expect(backtest.execute({ verbose: true })).resolves.not.toThrow();
+      await expect(backtest.execute({ verbose: true })).resolves.toBeUndefined();
 
       // 詳細ログが出力されていることを確認
       expect(console.log).toHaveBeenCalled();
@@ -117,7 +117,7 @@ describe('Backtest E2E', () => {
       // 空のDB
       backtest = new Backtest(testDb.db);
 
-      await expect(backtest.execute()).resolves.not.toThrow();
+      await expect(backtest.execute()).resolves.toBeUndefined();
 
       // 警告メッセージが出力されること
       expect(console.log).toHaveBeenCalledWith(

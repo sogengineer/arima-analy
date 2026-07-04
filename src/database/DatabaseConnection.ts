@@ -4,18 +4,18 @@
  * 実際のデータ操作はリポジトリ層で行う
  */
 
-import Database, { type Database as DatabaseType } from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-export type { DatabaseType };
+export type DatabaseType = Database;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export class DatabaseConnection {
-  private db: Database.Database;
+  private db: Database;
 
   constructor(dbPath: string = './arima.db') {
     this.db = new Database(dbPath);
@@ -28,7 +28,7 @@ export class DatabaseConnection {
   private initializeDatabase(): void {
     try {
       // 外部キー制約を有効化（SQLiteはデフォルトで無効）
-      this.db.pragma('foreign_keys = ON');
+      this.db.exec('PRAGMA foreign_keys = ON');
 
       const schemaPath = join(__dirname, 'schema.sql');
       const schema = readFileSync(schemaPath, 'utf-8');
@@ -44,7 +44,7 @@ export class DatabaseConnection {
    * データベース接続オブジェクトを取得
    * リポジトリで使用
    */
-  getConnection(): Database.Database {
+  getConnection(): Database {
     return this.db;
   }
 

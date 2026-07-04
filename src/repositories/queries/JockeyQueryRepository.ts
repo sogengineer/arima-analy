@@ -2,7 +2,7 @@
  * 騎手統計の取得リポジトリ
  */
 
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import type {
   JockeyVenueStats,
   JockeyOverallStats,
@@ -11,7 +11,7 @@ import type {
 import type { DBJockey, DBTrainer } from '../../types/HorseData';
 
 export class JockeyQueryRepository {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: Database) {}
 
   /**
    * 騎手の指定コース成績を取得（G1成績も含む）
@@ -26,8 +26,8 @@ export class JockeyQueryRepository {
       SELECT
         COUNT(*) as total_runs,
         SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) as wins,
-        SUM(CASE WHEN rr.finish_position <= 2 THEN 1 ELSE 0 END) as places,
-        SUM(CASE WHEN rr.finish_position <= 3 THEN 1 ELSE 0 END) as shows
+        SUM(CASE WHEN rr.finish_position = 2 THEN 1 ELSE 0 END) as places,
+        SUM(CASE WHEN rr.finish_position = 3 THEN 1 ELSE 0 END) as shows
       FROM race_entries e
       JOIN races r ON e.race_id = r.id
       JOIN venues v ON r.venue_id = v.id
@@ -79,8 +79,8 @@ export class JockeyQueryRepository {
       SELECT
         COUNT(*) as total_runs,
         SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) as wins,
-        SUM(CASE WHEN rr.finish_position <= 2 THEN 1 ELSE 0 END) as places,
-        SUM(CASE WHEN rr.finish_position <= 3 THEN 1 ELSE 0 END) as shows
+        SUM(CASE WHEN rr.finish_position = 2 THEN 1 ELSE 0 END) as places,
+        SUM(CASE WHEN rr.finish_position = 3 THEN 1 ELSE 0 END) as shows
       FROM race_entries e
       LEFT JOIN race_results rr ON rr.entry_id = e.id
       WHERE e.jockey_id = ?
@@ -127,8 +127,8 @@ export class JockeyQueryRepository {
       SELECT
         COUNT(*) as total_runs,
         SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) as wins,
-        SUM(CASE WHEN rr.finish_position <= 2 THEN 1 ELSE 0 END) as places,
-        SUM(CASE WHEN rr.finish_position <= 3 THEN 1 ELSE 0 END) as shows
+        SUM(CASE WHEN rr.finish_position = 2 THEN 1 ELSE 0 END) as places,
+        SUM(CASE WHEN rr.finish_position = 3 THEN 1 ELSE 0 END) as shows
       FROM race_entries e
       JOIN horses h ON e.horse_id = h.id
       LEFT JOIN race_results rr ON rr.entry_id = e.id

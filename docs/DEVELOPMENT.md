@@ -19,13 +19,13 @@
 | カテゴリ | 技術 |
 |---------|------|
 | 言語 | TypeScript 5.9 |
-| ランタイム | Node.js (ES Modules) |
-| パッケージマネージャ | yarn |
-| データベース | SQLite (better-sqlite3) |
+| ランタイム | Bun (TypeScript直接実行) |
+| パッケージマネージャ | bun |
+| データベース | SQLite (bun:sqlite) |
 | CLIフレームワーク | Commander.js |
 | 機械学習 | ml-random-forest, ml-logistic-regression |
 | 統計計算 | simple-statistics, regression |
-| テスト | vitest |
+| テスト | bun test |
 | 静的解析 | ESLint, TypeScript |
 
 ---
@@ -102,8 +102,7 @@ arima/
 
 ### 前提条件
 
-- Node.js 18以上
-- yarn
+- Bun 1.1以上
 
 ### インストール
 
@@ -113,10 +112,7 @@ git clone <repository-url>
 cd arima
 
 # 依存パッケージをインストール
-yarn install
-
-# ビルド
-yarn build
+bun install
 ```
 
 ### データベース初期化
@@ -130,31 +126,30 @@ sqlite3 arima.db < dist/database/schema.sql
 
 ---
 
-## npmスクリプト
+## スクリプト
 
 | スクリプト | 説明 |
 |-----------|------|
-| `yarn build` | TypeScriptをコンパイル、スキーマをコピー |
-| `yarn c` | 型チェックのみ（noEmit） |
-| `yarn start` | dist/index.js を実行 |
-| `yarn dev` | ホットリロード付きで開発実行 |
-| `yarn lint` | ESLintで静的解析 |
-| `yarn test` | vitestでテスト実行 |
-| `yarn fetch-jra` | JRA URLからHTMLを取得 |
-| `yarn extract-html` | HTMLから馬データを抽出 |
-| `yarn fetch-and-extract` | JRAから取得して自動抽出 |
+| `bun c` | 型チェックのみ（noEmit） |
+| `bun start` | src/index.ts を実行 |
+| `bun dev` | ホットリロード付きで開発実行 |
+| `bun lint` | ESLintで静的解析 |
+| `bun test` | bun test でテスト実行 |
+| `bun fetch-jra` | JRA URLからHTMLを取得 |
+| `bun extract-html` | HTMLから馬データを抽出 |
+| `bun fetch-and-extract` | JRAから取得して自動抽出 |
 
 ### 使用例
 
 ```bash
 # 開発モードで実行
-yarn dev horses
+bun dev horses
 
-# ビルド後に実行
-yarn build && yarn start score
+# スコアリングを実行
+bun start score
 
 # JRAからデータを取得して抽出
-yarn fetch-and-extract https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde1012024122206
+bun fetch-and-extract https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde1012024122206
 ```
 
 ---
@@ -165,7 +160,6 @@ yarn fetch-and-extract https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde101
 
 | パッケージ | バージョン | 用途 |
 |-----------|-----------|------|
-| better-sqlite3 | ^12.5.0 | SQLiteデータベース操作 |
 | commander | ^11.1.0 | CLIフレームワーク |
 | iconv-lite | ^0.7.1 | 文字コード変換（Shift_JIS対応） |
 | ml-logistic-regression | ^2.0.0 | ロジスティック回帰 |
@@ -179,13 +173,11 @@ yarn fetch-and-extract https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde101
 | パッケージ | バージョン | 用途 |
 |-----------|-----------|------|
 | typescript | ^5.9.3 | TypeScriptコンパイラ |
-| @types/better-sqlite3 | ^7.6.8 | 型定義 |
+| @types/bun | ^1.3.14 | Bun型定義（bun:sqlite含む） |
 | @types/node | ^20.10.0 | 型定義 |
 | eslint | ^8.0.0 | 静的解析 |
 | @typescript-eslint/eslint-plugin | ^6.0.0 | ESLintプラグイン |
 | @typescript-eslint/parser | ^6.0.0 | ESLintパーサー |
-| tsx | ^4.7.0 | TypeScript実行ランタイム |
-| vitest | ^1.2.0 | テストフレームワーク |
 
 ---
 
@@ -310,13 +302,13 @@ interface ScoreComponents {
 
 ### インポート順序
 
-1. Node.js 標準モジュール
+1. Node.js 標準モジュール・Bun組み込みモジュール
 2. サードパーティパッケージ
 3. 内部モジュール（相対パス）
 
 ```typescript
 import path from 'path';
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import { DBHorse } from '../types/HorseData.js';
 ```
 
@@ -342,13 +334,13 @@ calculateRecentPerformanceScore(horseId: number): number {
 
 ```bash
 # 全テストを実行
-yarn test
+bun test
 
 # ウォッチモードで実行
-yarn test --watch
+bun test --watch
 
 # カバレッジレポート
-yarn test --coverage
+bun test --coverage
 ```
 
 ---
@@ -375,4 +367,4 @@ JRAページの文字化けが発生する場合：
 Error: Cannot find module 'ml-random-forest'
 ```
 
-→ `yarn install` を再実行してください。
+→ `bun install` を再実行してください。

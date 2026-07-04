@@ -6,11 +6,11 @@
  * 専門家会議（2026/01/03）で合意した10要素構成に対応。
  */
 
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import type { ScoreUpdateData } from '../../types/RepositoryTypes';
 
 export class ScoreAggregateRepository {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: Database) {}
 
   /**
    * 馬スコアを更新（10要素構成 + total_score）
