@@ -26,7 +26,7 @@
 | 機械学習 | ml-random-forest, ml-logistic-regression |
 | 統計計算 | simple-statistics, regression |
 | テスト | bun test |
-| 静的解析 | ESLint, TypeScript |
+| 静的解析 | Biome, TypeScript |
 
 ---
 
@@ -130,10 +130,10 @@ sqlite3 arima.db < dist/database/schema.sql
 
 | スクリプト | 説明 |
 |-----------|------|
-| `bun c` | 型チェックのみ（noEmit） |
+| `bun run c` | 型チェックのみ（noEmit）。`bun c` は `bun create` と解釈されて失敗する |
 | `bun start` | src/index.ts を実行 |
 | `bun dev` | ホットリロード付きで開発実行 |
-| `bun lint` | ESLintで静的解析 |
+| `bun run lint` | Biome で静的解析（linter のみ。formatter と import 整理は無効） |
 | `bun test` | bun test でテスト実行 |
 | `bun fetch-jra` | JRA URLからHTMLを取得 |
 | `bun extract-html` | HTMLから馬データを抽出 |
@@ -175,9 +175,7 @@ bun fetch-and-extract https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde1012
 | typescript | ^5.9.3 | TypeScriptコンパイラ |
 | @types/bun | ^1.3.14 | Bun型定義（bun:sqlite含む） |
 | @types/node | ^20.10.0 | 型定義 |
-| eslint | ^8.0.0 | 静的解析 |
-| @typescript-eslint/eslint-plugin | ^6.0.0 | ESLintプラグイン |
-| @typescript-eslint/parser | ^6.0.0 | ESLintパーサー |
+| @biomejs/biome | ^2.5.14 | 静的解析（linter のみ使用。設定は `biome.json` と `biome-plugins/*.grit`） |
 
 ---
 
