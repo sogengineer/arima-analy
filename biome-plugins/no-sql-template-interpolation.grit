@@ -1,0 +1,19 @@
+language js
+
+// db.prepare / db.exec / db.query に式補間つきテンプレートリテラルを渡さない（SQL 注入対策）。
+// 値は必ずプレースホルダ（?）とバインドパラメータで渡すこと。
+//
+// 例外: `IN (${placeholders})` のように、テンプレート内の補間式がすべて
+// placeholders 識別子（大小文字不問、`horsePlaceholders` のような接尾辞形も含む）
+// だけの場合は、`?` の並びを組み立てているだけで値は bind 経由のため検出しない。
+// `${table}` `${limit}` `${cut}` のような識別子や式は従来どおり検出する。
+`$obj.$method($arg)` as $d where {
+  $method <: or { `prepare`, `exec`, `query` },
+  $arg <: r"`[^`]*\$\{[\s\S]*",
+  not $arg <: r"`([^$`]*\$\{(?i:[a-z0-9_$]*placeholders)\})+[^$`]*`"($seg),
+  register_diagnostic(
+    span = $d,
+    message = "SQL に式補間つきテンプレートリテラルを渡さない。プレースホルダ（?）とバインドパラメータを使うこと（`?` の並びを組み立てる placeholders 変数は除く）。",
+    severity = "warn"
+  )
+}

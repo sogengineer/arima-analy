@@ -1,0 +1,208 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": ["src/**/*.ts", "!**/node_modules", "!**/dist", "!**/data", "!**/fixtures"]
+  },
+  "formatter": { "enabled": false },
+  "assist": { "enabled": false },
+  "plugins": [
+    "./biome-plugins/no-sql-template-interpolation.grit",
+    "./biome-plugins/no-reduce-entries.grit",
+    "./biome-plugins/no-js-import-extension.grit"
+  ],
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "complexity": {
+        "noExcessiveCognitiveComplexity": { "level": "warn", "options": { "maxAllowedComplexity": 15 } },
+        "noExcessiveLinesPerFunction": { "level": "warn", "options": { "maxLines": 80 } },
+        "useOptionalChain": "warn",
+        "useMaxParams": { "level": "warn", "options": { "max": 5 } }
+      },
+      "correctness": {
+        "noUnusedVariables": "warn",
+        "noUnusedImports": "warn"
+      },
+      "nursery": {
+        "noFloatingPromises": "warn",
+        "noImpliedEval": "error",
+        "noExcessiveNestedCallbacks": { "level": "error", "options": { "max": 3 } }
+      },
+      "security": { "noGlobalEval": "error" },
+      "style": {
+        "noNegationElse": "warn",
+        "noNestedTernary": "warn",
+        "noNonNullAssertion": "warn",
+        "noExcessiveLinesPerFile": { "level": "warn", "options": { "maxLines": 400 } },
+        "useImportType": "warn",
+        "noExcessiveClassesPerFile": "warn"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noFocusedTests": "error",
+        "noSkippedTests": "error",
+        "noGlobalIsNan": "warn",
+        "useIterableCallbackReturn": "warn"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["src/domain/**"],
+      "plugins": ["./biome-plugins/no-ambient-time.grit"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  { "group": ["**/commands/**", "**/commands"], "message": "domain 層は commands を import しない。" }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/domain/entities/**", "src/domain/valueObjects/**"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noConsole": "error" },
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "bun:sqlite": "entities / valueObjects は DB に依存しない。",
+                  "node:fs": "entities / valueObjects は I/O を行わない。",
+                  "node:fs/promises": "entities / valueObjects は I/O を行わない。",
+                  "fs": "entities / valueObjects は I/O を行わない。",
+                  "node:http": "entities / valueObjects はネットワークにアクセスしない。",
+                  "node:https": "entities / valueObjects はネットワークにアクセスしない。",
+                  "http": "entities / valueObjects はネットワークにアクセスしない。",
+                  "https": "entities / valueObjects はネットワークにアクセスしない。",
+                  "node:child_process": "entities / valueObjects は外部プロセスを起動しない。",
+                  "child_process": "entities / valueObjects は外部プロセスを起動しない。"
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "**/repositories/**", "**/repositories",
+                      "**/database/**", "**/database",
+                      "**/commands/**", "**/commands",
+                      "**/models/**", "**/models",
+                      "**/utils/**", "**/utils"
+                    ],
+                    "message": "entities / valueObjects は repositories / database / commands / models / utils に依存しない。純粋な計算に保つこと。"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/repositories/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "**/commands/**", "**/commands",
+                      "**/models/**", "**/models",
+                      "**/domain/**", "**/domain"
+                    ],
+                    "message": "repositories は commands / models / domain に依存しない（エンティティ構築は domain 側の責務）。"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/constants/**", "src/types/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "**/commands/**", "**/commands",
+                      "**/domain/**", "**/domain",
+                      "**/repositories/**", "**/repositories",
+                      "**/models/**", "**/models",
+                      "**/database/**", "**/database",
+                      "**/utils/**", "**/utils",
+                      "**/features/**", "**/features"
+                    ],
+                    "message": "constants / types は依存の末端。他層を import しない。"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/models/**", "src/utils/**", "src/features/**", "src/database/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["**/commands/**", "**/commands"],
+                    "message": "models / utils / features / database は commands を import しない（依存は index.ts → commands → 下位層の一方向）。"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/**",
+        "!src/commands/**",
+        "!src/database/**",
+        "!src/index.ts",
+        "!src/models/**",
+        "!**/__test__/**",
+        "!src/test/**"
+      ],
+      "plugins": ["./biome-plugins/no-database-connection-construction.grit"]
+    },
+    {
+      "includes": ["**/__test__/**", "src/test/**"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off",
+            "noExcessiveLinesPerFunction": "off"
+          },
+          "style": { "noExcessiveLinesPerFile": "off", "noNonNullAssertion": "off" },
+          "nursery": { "noExcessiveNestedCallbacks": "off" }
+        }
+      }
+    }
+  ]
+}

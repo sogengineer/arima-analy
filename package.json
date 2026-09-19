@@ -11,7 +11,7 @@
     "c": "tsgo --noEmit",
     "start": "bun src/index.ts",
     "dev": "bun --watch src/index.ts",
-    "lint": "eslint src/**/*.ts",
+    "lint": "biome lint --max-diagnostics=none",
     "test": "bun test",
     "fetch-jra": "bun src/index.ts fetch-jra",
     "extract-html": "bun src/index.ts extract-html-only",
@@ -26,12 +26,10 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
     "@types/bun": "^1.3.14",
     "@types/node": "^20.10.0",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
     "@typescript/native-preview": "^7.0.0-dev.20251227.1",
-    "eslint": "^8.0.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
