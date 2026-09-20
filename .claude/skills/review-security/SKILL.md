@@ -105,7 +105,7 @@ lint（error）が機械検出するため本項では見ない（一覧は revi
 - [ ] 外部由来の文字列をシェルコマンド・正規表現の組み立てに使っていないか（外部入力から作る正規表現は ReDoS の入口にもなる）
 
 **NG例**: 取り込み元の指定を `await import(userSuppliedPath)` で解決する（任意コード実行に直結する）
-**OK例**: `ImportData` の `await import('../utils/HorseDataExtractor')` のように、遅延読み込みでもパスは静的リテラル
+**OK例**: `ImportData` の `await import('@/utils/HorseDataExtractor')` のように、遅延読み込みでもパスは静的リテラル
 
 ### 判定基準
 

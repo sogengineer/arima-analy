@@ -46,7 +46,8 @@ description: "有馬記念分析システム（Bun + TypeScript CLI）のコー�
 | plugin `no-sql-template-interpolation` | `db.prepare` / `db.exec` / `db.query` に補間つきテンプレートを渡さない（`?` の並びを組み立てる `placeholders` 変数は除く） |
 | plugin `no-ambient-time`（`src/domain/**`） | domain 層で引数なしの `new Date()` / `Date.now()` を使わない |
 | plugin `no-reduce-entries` | `reduce` / `.entries()` を使わない |
-| plugin `no-js-import-extension` | 相対 import に `.js` 拡張子を付けない |
+| plugin `no-js-import-extension` | 内部モジュールの import に `.js` 拡張子を付けない（`./` と `@/` の両方） |
+| plugin `no-parent-relative-import` | ディレクトリをまたぐ import は `@/` で書く（`../` で親をたどらない。静的 import・再 export・動的 import が対象） |
 | plugin `no-direct-statement-preparation` | `db.prepare` / `db.exec` / `db.query` を直接呼ばない（`src/database/**`・テスト・テストヘルパは対象外。クエリは Kysely で組み立て実行ヘルパーに渡す） |
 
 
@@ -162,8 +163,8 @@ description: "有馬記念分析システム（Bun + TypeScript CLI）のコー�
 
 #### 2.14 import の一貫性
 
-- [ ] import 順序が `docs/DEVELOPMENT.md` の規約（1. Node/Bun 組み込み → 2. サードパーティ → 3. 内部モジュール）に従っているか（**lint は見ない**。assist の `organizeImports` は書き換えを伴うため無効にしてある。本項が唯一の検出手段で、目視で見る）
-- [ ] 相対 import の `.js` 拡張子（plugin `no-js-import-extension`）と型のみ import の `import type` 化（`style/useImportType`）は lint が warn で機械検出する。**該当ルールの warning が本変更で純増していないか**を見る（新規 import は拡張子なしに揃える）
+- [ ] import 順序が `docs/DEVELOPMENT.md` の規約（1. Node/Bun 組み込み → 2. サードパーティ → 3. `@/` の内部モジュール → 4. `./` の同ディレクトリ配下）に従っているか（**lint は見ない**。assist の `organizeImports` は書き換えを伴うため無効にしてある。本項が唯一の検出手段で、目視で見る）
+- [ ] ディレクトリをまたぐ import が `@/`（plugin `no-parent-relative-import`）、拡張子なし（plugin `no-js-import-extension`）、型のみ import が `import type`（`style/useImportType`）になっているかは lint が error で機械検出する。**本項では同ディレクトリ配下を指す `./` が `@/` に書き換わっていないか**（自ファイルの隣を遠回りに参照していないか）を目視で見る
 
 #### 2.15 CLI 出力（console）の置き場所とレベル
 
