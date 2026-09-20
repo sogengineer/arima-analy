@@ -62,7 +62,8 @@
               "options": {
                 "patterns": [
                   { "group": ["**/commands/**", "**/commands"], "message": "domain 層は commands を import しない。" },
-                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。クエリの組み立てをドメインに持ち込まない。" }
+                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。クエリの組み立てをドメインに持ち込まない。" },
+                  { "group": ["**/database/QueryRunner", "**/database/QueryRunner.ts"], "message": "QueryRunner は repositories / database 層だけで使う（queryBuilder を層外に持ち出すと、実行系メソッドの検出範囲の外で空の結果を掴むことになる）。" }
                 ]
               }
             }
@@ -102,7 +103,8 @@
                     ],
                     "message": "entities / valueObjects は repositories / database / commands / models / utils に依存しない。純粋な計算に保つこと。"
                   },
-                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。クエリの組み立てをドメインに持ち込まない。" }
+                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。クエリの組み立てをドメインに持ち込まない。" },
+                  { "group": ["**/database/QueryRunner", "**/database/QueryRunner.ts"], "message": "QueryRunner は repositories / database 層だけで使う（queryBuilder を層外に持ち出すと、実行系メソッドの検出範囲の外で空の結果を掴むことになる）。" }
                 ]
               }
             }
@@ -155,7 +157,8 @@
                     ],
                     "message": "constants / types は依存の末端。他層を import しない。"
                   },
-                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。DB の型定義は src/database/schema に置く。" }
+                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。DB の型定義は src/database/schema に置く。" },
+                  { "group": ["**/database/QueryRunner", "**/database/QueryRunner.ts"], "message": "QueryRunner は repositories / database 層だけで使う（queryBuilder を層外に持ち出すと、実行系メソッドの検出範囲の外で空の結果を掴むことになる）。" }
                 ]
               }
             }
@@ -176,7 +179,8 @@
                     "group": ["**/commands/**", "**/commands"],
                     "message": "models / utils / features / database は commands を import しない（依存は index.ts → commands → 下位層の一方向）。"
                   },
-                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。SQL の組み立てはリポジトリに置く。" }
+                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。SQL の組み立てはリポジトリに置く。" },
+                  { "group": ["**/database/QueryRunner", "**/database/QueryRunner.ts"], "message": "QueryRunner は repositories / database 層だけで使う（queryBuilder を層外に持ち出すと、実行系メソッドの検出範囲の外で空の結果を掴むことになる）。" }
                 ]
               }
             }
@@ -213,7 +217,8 @@
               "level": "error",
               "options": {
                 "patterns": [
-                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。commands から SQL を組み立てない。" }
+                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。commands から SQL を組み立てない。" },
+                  { "group": ["**/database/QueryRunner", "**/database/QueryRunner.ts"], "message": "QueryRunner は repositories / database 層だけで使う（queryBuilder を層外に持ち出すと、実行系メソッドの検出範囲の外で空の結果を掴むことになる）。" }
                 ]
               }
             }
