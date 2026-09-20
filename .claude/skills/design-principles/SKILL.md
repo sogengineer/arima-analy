@@ -71,6 +71,11 @@ commands 層（CLI コマンド）が肥大し domain が貧血症になるの�
 
 7観点の物差しはすべて「読み手の思考量を増やすか？」。迷ったら、その書き方が読み手に**確認範囲の拡大**（名称・参照・状態・面積）か**複雑性への対処**（役割・階層・秩序）を強いるかを考える。
 
+## クエリ層の約束（DB を触るとき）
+
+- **Kysely はリポジトリ層（`src/repositories`）と DB 層（`src/database`）だけで使う**。組み立てたクエリは `.compile()` して `src/database/QueryRunner.ts` の `selectRows` / `selectRow` / `runStatement` で実行する（ビルダーの `.execute()` 系は DummyDriver のため空の結果が返る）
+- 実行は **bun:sqlite の同期 API のまま**。トランザクションは `DatabaseConnection.runInTransaction`。非同期化してこの性質を壊さない
+
 ## ドメイン固有の不変条件（スコアリング・ML を触るとき）
 
 - `SCORE_WEIGHTS` の**合計は 1.0**。要素の追加・重みの変更は合計を必ず再確認し、`docs/ARCHITECTURE.md` / `docs/MODELS.md` / help スキルの配分表も追随させる

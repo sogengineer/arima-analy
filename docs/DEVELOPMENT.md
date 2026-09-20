@@ -161,6 +161,7 @@ bun fetch-and-extract https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde1012
 |-----------|-----------|------|
 | commander | ^11.1.0 | CLIフレームワーク |
 | iconv-lite | ^0.7.1 | 文字コード変換（Shift_JIS対応） |
+| kysely | ^0.29.6 | SQL クエリビルダ（組み立てのみ。実行は bun:sqlite） |
 | ml-matrix | ^6.10.0 | 行列演算 |
 | simple-statistics | ^7.8.8 | 統計計算 |
 

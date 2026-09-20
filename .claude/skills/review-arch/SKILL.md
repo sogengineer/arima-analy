@@ -35,6 +35,7 @@ description: "有馬記念分析システムのアーキテクチャ/レイヤ�
 - [ ] `src/repositories/queries/` の `*QueryRepository.ts` が SELECT のみで、INSERT / UPDATE / DELETE / `db.exec` を持っていないか
 - [ ] 書き込みが `src/repositories/aggregates/` の `*AggregateRepository.ts` に集約されているか
 - [ ] 新規の集計テーブル更新が aggregates 側に置かれているか（`ScoreAggregateRepository.rebuildHorseStats` が既存の前例）
+- [ ] クエリの組み立てが Kysely（`src/database/QueryRunner.ts` の `queryBuilder`）で、実行が同ファイルのヘルパー経由になっているか。参照系・更新系のどちらもリポジトリ層に閉じているか（`kysely` の import 制限とビルダー実行系の禁止は lint が error で担保する。review-code 2.1）
 
 **NG例**: `HorseQueryRepository` に `UPDATE horses SET ...` を足す
 **OK例**: 参照は `src/repositories/queries/HorseQueryRepository.ts`、スコア保存は `src/repositories/aggregates/ScoreAggregateRepository.ts`

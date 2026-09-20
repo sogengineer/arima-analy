@@ -418,6 +418,9 @@ src/
 │
 ├── database/                    # DB関連
 │   ├── DatabaseConnection.ts   # DB接続
+│   ├── QueryRunner.ts          # Kysely(組み立て) と bun:sqlite(実行) の橋渡し
+│   ├── schema/                 # Kysely のDB型定義（テーブル名→行型）
+│   ├── migrations.ts           # 追加型マイグレーション
 │   └── schema.sql              # スキーマ定義
 │
 ├── utils/                       # ユーティリティ
