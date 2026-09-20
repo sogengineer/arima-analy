@@ -42,7 +42,7 @@ description: "外部データ取得と取り込み経路のセキュリティレ
 #### 4.2 スクレイピングの作法
 
 - [ ] タイムアウトが設定され、超過時に接続が破棄されるか（`JRAFetcher` の `defaultOptions.timeout` = 30000ms と `request.setTimeout(...)` → `request.destroy()`）
-- [ ] 複数 URL をループで取る経路（`src/commands/CollectData.ts` / `src/utils/JRACrawlIndex.ts` 等）に、リクエスト間隔（sleep / レートリミット）が入っているか。間隔制御なしのループ取得・一括取得を新設・拡張する変更は WARN 以上
+- [ ] 複数 URL をループで取る経路（`src/utils/JRAFetcher.ts` を使う新規コマンド等）に、リクエスト間隔（sleep / レートリミット）が入っているか。間隔制御なしのループ取得・一括取得を新設・拡張する変更は WARN 以上
 - [ ] User-Agent の扱いが妥当か（`JRAFetcher.defaultOptions.userAgent` はデスクトップ Chrome を騙る固定値。相手サイトの規約・robots の観点で、これを新たに増やす・偽装を強める変更は理由が要る）
 - [ ] レスポンスのエンコーディング判定が壊れていないか（`JRAFetcher.convertEncoding` はオプション既定の Shift_JIS で decode し、未知指定時は Shift_JIS → UTF-8 のフォールバック。HTTP ヘッダの charset は見ていない点を踏まえた変更か）
 

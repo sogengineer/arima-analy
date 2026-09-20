@@ -222,6 +222,13 @@ CREATE TABLE races (
   total_horses INTEGER,
   prize_money TEXT,
   jra_race_id TEXT UNIQUE,
+  grade TEXT,                 -- G1 / G2 / G3 / J.G1（重賞のみ）
+  course_detail TEXT,         -- 「芝・右 外」等
+  weather TEXT,
+  start_time TEXT,
+  kaisai_label TEXT,          -- 「4回中山5日」
+  lap_times TEXT,             -- ハロンタイム
+  updated_at DATETIME,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(race_date, venue_id, race_number)
 );
@@ -234,12 +241,18 @@ CREATE TABLE races (
 | venue_id | INTEGER | 競馬場ID |
 | race_number | INTEGER | レース番号（1〜12） |
 | race_name | TEXT | レース名 |
-| race_class | TEXT | クラス（G1/G2/G3等） |
+| race_class | TEXT | クラス（オープン/3勝クラス/未勝利 等） |
+| grade | TEXT | グレード（G1/G2/G3/J.G1。重賞のみ、平場はNULL） |
 | race_type | TEXT | コース種別（芝/ダート/障害） |
 | distance | INTEGER | 距離（m） |
 | track_condition | TEXT | 馬場状態 |
 | total_horses | INTEGER | 出走頭数 |
 | prize_money | TEXT | 賞金 |
+| course_detail | TEXT | コース詳細（「芝・右 外」等） |
+| weather | TEXT | 天候 |
+| start_time | TEXT | 発走時刻 |
+| kaisai_label | TEXT | 開催表記（「4回中山5日」） |
+| lap_times | TEXT | ハロンタイム |
 
 ---
 
@@ -281,7 +294,7 @@ CREATE TABLE race_entries (
 | assigned_weight | REAL | 斤量 |
 | horse_weight | INTEGER | 馬体重 |
 | weight_change | INTEGER | 体重増減 |
-| win_odds | REAL | 単勝オッズ |
+| win_odds | REAL | **出走前の**単勝オッズ。出馬表収集で埋める列（レース結果ページからは取得できないため、結果のみ収集したレースでは NULL のまま）。レース後の確定オッズをここに入れてはならない（1着馬にしか値が付かず look-ahead リークになる） |
 | popularity | INTEGER | 人気順位 |
 | career_wins | INTEGER | 通算勝利数 |
 | career_runs | INTEGER | 通算出走数 |
@@ -306,6 +319,7 @@ CREATE TABLE race_results (
   corner_positions TEXT,
   final_win_odds REAL,
   final_place_odds REAL,
+  rating INTEGER,             -- JRA公式レーティング
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
@@ -321,7 +335,11 @@ CREATE TABLE race_results (
 | margin | TEXT | 着差（文字列） |
 | last_3f_time | REAL | 上がり3Fタイム |
 | last_3f_rank | INTEGER | 上がり3F順位 |
-| corner_positions | TEXT | コーナー通過順 |
+| margin_seconds | REAL | 着差（秒。勝ち馬タイムとの差から導出） |
+| corner_positions | TEXT | コーナー通過順（`2-3-4-3`） |
+| final_win_odds | REAL | 確定単勝オッズ（単勝払戻金/100。1着馬のみ）。回収率の払戻計算専用で、ML特徴量には使わない |
+| final_place_odds | REAL | 確定複勝オッズ（複勝払戻金/100。3着まで） |
+| rating | INTEGER | JRA公式レーティング（重賞などのみ） |
 
 ---
 
@@ -584,3 +602,12 @@ CREATE INDEX idx_entries_race ON race_entries(race_id);
 ```
 src/database/schema.sql
 ```
+
+## マイグレーション
+
+`schema.sql` は `CREATE TABLE IF NOT EXISTS` のため、既存DBには新しい列が入りません。
+差分は `src/database/migrations.ts` が **追加操作のみ**（ADD COLUMN / CREATE TABLE /
+CREATE INDEX）で埋めます。列の削除・型変更・データ書き換えは行わないため、
+既存DBをそのまま使い続けられます。
+
+マイグレーションは `DatabaseConnection` の初期化時に自動実行されます。

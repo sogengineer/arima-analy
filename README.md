@@ -4,9 +4,9 @@ TypeScriptで実装した有馬記念の馬券分析システムです。競走�
 
 ## 特徴
 
-- JRA出馬表からの自動データ抽出
+- JRA出馬表からの自動データ抽出とSQLiteへの蓄積
 - **10要素スコアリングモデル**による総合評価（馬場適性・枠順・調教師を含む）
-- ロジスティック回帰＋ランダムフォレストによる機械学習予測
+- L2正則化ロジスティック回帰＋レース内 softmax（conditional logit）による機械学習予測
 - **バックテスト機能**による予測精度の検証
 - **重み最適化**による機械学習ベースの改善提案
 - Claude Code 対応の対話型インターフェース
@@ -27,26 +27,42 @@ bun install
 
 ### 基本的な使い方
 
-#### 1. データ取得
+#### 1. レースの出馬表を取得
 
-JRA出馬表URLからデータを取得します。
+発走前のレース（今週開催）はオッズ・人気付きの出馬表を取得できます。
 
 ```bash
 # JRAからデータを取得して抽出
-bun fetch-and-extract https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde1012024122206
+bun fetch-and-extract "https://www.jra.go.jp/JRADB/accessD.html?CNAME=<出馬表のCNAME>"
 
 # データベースにインポート
 bun start import-url data/horse-extracted-data.json
+
+# 蓄積状況の確認
+bun start data-status
 ```
 
-#### 2. 予想実行
+> リクエスト間隔はプロセス全体で最低2秒に固定されています。
+> 取得先は `jra.go.jp` のみ許可されています。
+
+#### 2. 集計の再構築
 
 ```bash
+# 馬場別・コース別成績の再集計
+bun start rebuild-stats
+```
+
+#### 3. 予想実行
+
+```bash
+# 登録済みレース一覧（レースIDを確認）
+bun start score --list
+
 # スコアリング分析
-bun start score
+bun start score --race <レースID>
 
 # 機械学習予測
-bun start ml
+bun start ml --race <レースID>
 ```
 
 ---
@@ -59,7 +75,7 @@ Claude Code を使用すると、対話形式で簡単に操作できます。
 
 | スキル | 説明 |
 |--------|------|
-| fetch-data | JRA出馬表URLからデータを取得・抽出 |
+| fetch-data | JRA公式サイトから出馬表を取得してデータ抽出 |
 | race-list | 登録済みレースを一覧表示し、予想を実行 |
 | score-calc | 指定レースのスコアリングを実行 |
 | horse-list | 登録済み馬の一覧を表示 |
@@ -101,7 +117,9 @@ Claude Code を使用すると、対話形式で簡単に操作できます。
 
 ### 機械学習モデル
 
-ロジスティック回帰（30%）とランダムフォレスト（70%）を組み合わせたアンサンブル予測。スコアリングと同じ**10要素**を特徴量として複勝確率を予測します。
+L2正則化ロジスティック回帰にレース内 softmax（conditional logit）を組み合わせ、勝率・複勝率を予測します。
+市場系・実績系の生特徴量を一次特徴量とし、スコアリングの**10要素**は二次の派生特徴量として利用します。
+詳細は [docs/MODELS.md](docs/MODELS.md) を参照してください。
 
 ---
 
@@ -135,8 +153,9 @@ Claude Code を使用すると、対話形式で簡単に操作できます。
    └─ 馬情報・血統・前走データを登録
 
 3. 分析実行
-   bun start score     # スコアリング
-   bun start ml        # 機械学習予測
+   bun start score --list             # レースID確認
+   bun start score --race <レースID>  # スコアリング
+   bun start ml --race <レースID>     # 機械学習予測
 
 4. 最終予想
    └─ スコア × ML の両結果を総合判断

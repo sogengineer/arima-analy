@@ -6,6 +6,7 @@
 
 - [Claude Code スキル](#claude-code-スキル)
 - [CLIコマンド](#cliコマンド)
+  - [学習データ収集](#学習データ収集)
   - [データ取得・抽出](#データ取得抽出)
   - [データインポート](#データインポート)
   - [一覧表示](#一覧表示)
@@ -22,7 +23,7 @@ Claude Code を使用すると、対話形式で簡単に操作できます。
 
 | スキル | 説明 |
 |--------|------|
-| fetch-data | JRA出馬表URLからデータを取得・抽出 |
+| fetch-data | JRA公式サイトから出馬表を取得してデータ抽出 |
 | race-list | 登録済みレースを一覧表示し、予想を実行 |
 | score-calc | 指定レースのスコアリングを実行 |
 | horse-list | 登録済み馬の一覧を血統情報付きで表示 |
@@ -56,6 +57,33 @@ bun start <コマンド>
 
 # 開発モード
 bun dev <コマンド>
+```
+
+---
+
+### データの棚卸し・再集計
+
+#### `data-status`
+
+蓄積データの棚卸しを表示します（ML設計の Step 0）。
+
+```bash
+bun start data-status
+```
+
+表示内容: レース数 / 出走行数 / 結果あり行数 / 登録馬・騎手・競馬場数 / 期間 /
+芝ダ別・格付別の内訳 / 主要特徴量のnull率 / ML適合度
+
+データの投入は `fetch-jra` → `extract-html-only` → `import-url`（`fetch-data` /
+`db-import` スキル）で行います。
+
+#### `rebuild-stats`
+
+保存済みレース結果から馬場別・コース別成績を全件再計算して置き換え、
+`race_entries.win_odds` に結果由来の確定オッズが混入した状態をクリアします。
+
+```bash
+bun start rebuild-stats
 ```
 
 ---
@@ -144,13 +172,15 @@ bun start import-url data/horse-extracted-data.json
 
 馬を手動で登録します。
 
+引数はJSON文字列です（`ImportData.addSingleHorse` が `JSON.parse` します）。
+
 ```bash
-bun start add-horse "馬名,生年,性別,父,母,母父,調教師"
+bun start add-horse '{"name":"馬名","birthYear":2020,"sex":"牡","sire":"父名","mare":"母名","maresSire":"母父名","trainer":"調教師名"}'
 ```
 
 **例:**
 ```bash
-bun start add-horse "テスト馬,2020,牡,ディープインパクト,母馬名,キングカメハメハ,調教師名"
+bun start add-horse '{"name":"テスト馬","birthYear":2020,"sex":"牡","sire":"ディープインパクト","mare":"母馬名","maresSire":"キングカメハメハ","trainer":"調教師名"}'
 ```
 
 ---
@@ -320,9 +350,9 @@ bun start ml
 | `-c, --cross-check` | スコアリング結果とクロスチェック |
 
 **アルゴリズム:**
-- ロジスティック回帰（30%の重み）
-- ランダムフォレスト（70%の重み）
-- アンサンブル予測
+- L2正則化ロジスティック回帰
+- レース内 softmax（conditional logit）による確率較正
+- walk-forward 検証（詳細は [MODELS.md](MODELS.md)）
 
 ---
 
@@ -330,6 +360,8 @@ bun start ml
 
 | コマンド | 説明 | 実装状態 |
 |---------|------|---------|
+| `data-status` | 蓄積データの棚卸し | 実装済み |
+| `rebuild-stats` | 馬場別・コース別成績の再構築 | 実装済み |
 | `fetch-jra` | JRA URLからHTML取得 | 実装済み |
 | `extract-html` | HTMLからデータ抽出（DB登録） | 実装済み |
 | `extract-html-only` | HTMLからデータ抽出（JSON保存） | 実装済み |
@@ -347,3 +379,5 @@ bun start ml
 | `score` | スコアリング | 実装済み |
 | `predict` | 統計予測 | 実装済み |
 | `ml` | 機械学習予測 | 実装済み |
+| `backtest` | 過去レースでの予測精度検証 | 実装済み |
+| `optimize-weights` | 過去データからの重み最適化 | 実装済み |

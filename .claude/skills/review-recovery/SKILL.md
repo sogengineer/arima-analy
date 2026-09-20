@@ -22,7 +22,7 @@ description: "再実行性・リカバリー・テスタビリティのレビュ
 
 1. Grep: `new Date(` / `Date.now()` / `getFullYear()` / `toISOString()`（`__test__` を除く本番コードを対象に、件数のベースラインをその場で取る）
 2. `src/commands/ImportData.ts`（取り込みの本体・トランザクション・統計再構築の呼び出し）
-3. `src/repositories/aggregates/`（`insertRace` / `insertHorseWithBloodline` / `insertRaceEntry` の一致条件と upsert、`ScoreAggregateRepository.rebuildHorseStats`、`RaceResultImporter` / `CollectionLogRepository`）
+3. `src/repositories/aggregates/`（`insertRace` / `insertHorseWithBloodline` / `insertRaceEntry` の一致条件と upsert、`ScoreAggregateRepository.rebuildHorseStats`）
 4. `src/database/DatabaseConnection.ts`（`runInTransaction` / `close`）と `src/database/schema.sql`（UNIQUE 制約・`ON CONFLICT` の効き方・`CURRENT_TIMESTAMP`）
 5. `src/commands/` 各コマンドの `finally` での接続クローズ、`src/models/MachineLearningModel.ts` の `ownsConnection` 方式
 

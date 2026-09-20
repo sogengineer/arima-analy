@@ -23,8 +23,8 @@
 | パッケージマネージャ | bun |
 | データベース | SQLite (bun:sqlite) |
 | CLIフレームワーク | Commander.js |
-| 機械学習 | ml-random-forest, ml-logistic-regression |
-| 統計計算 | simple-statistics, regression |
+| 機械学習 | 自前実装のロジスティック回帰（src/models/LogisticRegression.ts） |
+| 統計計算 | simple-statistics, ml-matrix |
 | テスト | bun test |
 | 静的解析 | Biome, TypeScript |
 
@@ -80,8 +80,7 @@ arima/
 │   ├── types/
 │   │   ├── HorseData.ts            # データ型定義
 │   │   ├── RepositoryTypes.ts      # リポジトリ型定義
-│   │   ├── ml-modules.d.ts         # ML関連型定義
-│   │   └── regression.d.ts         # 回帰分析型定義
+│   │   └── ml-modules.d.ts         # ML関連型定義
 │   └── utils/
 │       ├── HorseDataExtractor.ts   # HTMLデータ抽出
 │       └── JRAFetcher.ts           # JRAデータ取得
@@ -162,10 +161,7 @@ bun fetch-and-extract https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01sde1012
 |-----------|-----------|------|
 | commander | ^11.1.0 | CLIフレームワーク |
 | iconv-lite | ^0.7.1 | 文字コード変換（Shift_JIS対応） |
-| ml-logistic-regression | ^2.0.0 | ロジスティック回帰 |
 | ml-matrix | ^6.10.0 | 行列演算 |
-| ml-random-forest | ^2.1.0 | ランダムフォレスト |
-| regression | ^2.0.1 | 回帰分析 |
 | simple-statistics | ^7.8.8 | 統計計算 |
 
 ### 開発依存関係（devDependencies）
@@ -362,7 +358,7 @@ JRAページの文字化けが発生する場合：
 ### ML関連のエラー
 
 ```
-Error: Cannot find module 'ml-random-forest'
+Error: Cannot find module 'ml-matrix'
 ```
 
 → `bun install` を再実行してください。
