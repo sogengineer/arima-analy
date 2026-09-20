@@ -89,7 +89,7 @@ arima/
 ├── docs/                           # ドキュメント
 ├── dist/                           # ビルド出力
 ├── .claude/
-│   └── commands/                   # Claude Codeスキル定義
+│   └── skills/                     # Claude Codeスキル定義
 ├── arima.db                        # SQLiteデータベース
 ├── package.json
 ├── tsconfig.json
