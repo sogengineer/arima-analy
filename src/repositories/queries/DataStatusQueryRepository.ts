@@ -8,8 +8,8 @@
 
 import type { Database } from 'bun:sqlite';
 import { sql } from 'kysely';
-import { queryBuilder, selectRow, selectRows } from '../../database/QueryRunner';
-import type { Database as DatabaseSchema } from '../../database/schema';
+import { queryBuilder, selectRow, selectRows } from '@/database/QueryRunner';
+import type { Database as DatabaseSchema } from '@/database/schema';
 
 /** null 率を監視する対象テーブル */
 export type MonitoredTable = 'race_entries' | 'race_results' | 'races';

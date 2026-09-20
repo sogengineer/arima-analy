@@ -1,4 +1,4 @@
-import type { ExtractedRaceData, HorseData, RaceRecord } from '../types/HorseData';
+import type { ExtractedRaceData, HorseData, RaceRecord } from '@/types/HorseData';
 
 /** JRA表記の戦績 `(1着.2着.3着.着外)` に戻す（`runs` は出走数なので着外を引く） */
 export function formatRecord(record: RaceRecord): string {

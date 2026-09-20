@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'bun:test';
-import { Horse } from '../Horse';
-import { RaceResult } from '../RaceResult';
-import { Race } from '../Race';
-import { Jockey } from '../Jockey';
-import { Trainer } from '../Trainer';
-import type { CourseStats, TrackStats, HorseRaceResult } from '../../../types/RepositoryTypes';
+import { Horse } from '@/domain/entities/Horse';
+import { RaceResult } from '@/domain/entities/RaceResult';
+import { Race } from '@/domain/entities/Race';
+import { Jockey } from '@/domain/entities/Jockey';
+import { Trainer } from '@/domain/entities/Trainer';
+import type { CourseStats, TrackStats, HorseRaceResult } from '@/types/RepositoryTypes';
 import {
   RECENT_RACE_WEIGHTS,
   getPositionScore,
@@ -13,7 +13,7 @@ import {
   G1_DEFAULT_SCORE,
   LAST_3F_PARAMS,
   TRACK_CONDITION_DEFAULT_SCORE
-} from '../../../constants/ScoringConstants';
+} from '@/constants/ScoringConstants';
 
 // ============================================
 // テストデータ生成ヘルパー

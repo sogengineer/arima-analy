@@ -3,7 +3,7 @@
  */
 
 import { Matrix, solve } from 'ml-matrix';
-import { SCORE_WEIGHTS } from '../constants/ScoringConstants';
+import { SCORE_WEIGHTS } from '@/constants/ScoringConstants';
 import type { TrainingRace } from './MachineLearningTypes';
 import { sumOf, weightedSum } from './MachineLearningMath';
 

@@ -7,9 +7,9 @@
  * ここではファイルの読み込み・外部取得は行わない（純粋な文字列処理）。
  */
 
-import type { RaceType, TrackCondition, JRARaceHeader } from '../types/JRAPage';
+import type { RaceType, TrackCondition, JRARaceHeader } from '@/types/JRAPage';
 
-export type { RaceType, TrackCondition, JRARaceHeader } from '../types/JRAPage';
+export type { RaceType, TrackCondition, JRARaceHeader } from '@/types/JRAPage';
 
 // ============================================
 // 共通ユーティリティ

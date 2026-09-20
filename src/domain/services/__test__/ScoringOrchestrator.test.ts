@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createTestDb, type TestDatabase } from '../../../test/helpers/testDb';
-import { ScoringOrchestrator } from '../ScoringOrchestrator';
-import { FeatureBuilder } from '../../../features/FeatureBuilder';
+import { createTestDb, type TestDatabase } from '@/test/helpers/testDb';
+import { ScoringOrchestrator } from '@/domain/services/ScoringOrchestrator';
+import { FeatureBuilder } from '@/features/FeatureBuilder';
 
 describe('枠番の補完（一括・単体・ML）', () => {
   let testDb: TestDatabase;

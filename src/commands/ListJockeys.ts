@@ -1,5 +1,5 @@
-import { DatabaseConnection } from '../database/DatabaseConnection';
-import { JockeyQueryRepository } from '../repositories/queries/JockeyQueryRepository';
+import { DatabaseConnection } from '@/database/DatabaseConnection';
+import { JockeyQueryRepository } from '@/repositories/queries/JockeyQueryRepository';
 
 export class ListJockeys {
   private readonly connection: DatabaseConnection;

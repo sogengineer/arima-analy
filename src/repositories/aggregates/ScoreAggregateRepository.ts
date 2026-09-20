@@ -7,9 +7,9 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { queryBuilder, runStatement, selectRows } from '../../database/QueryRunner';
-import type { ScoreUpdateData } from '../../types/RepositoryTypes';
-import { getDistanceCategory } from '../../constants/DistanceConstants';
+import { queryBuilder, runStatement, selectRows } from '@/database/QueryRunner';
+import type { ScoreUpdateData } from '@/types/RepositoryTypes';
+import { getDistanceCategory } from '@/constants/DistanceConstants';
 
 /** 集計表の勝敗カウント（1着 / 2着 / 3着をそれぞれ 1 か 0 で表す） */
 interface FinishCounts {

@@ -18,8 +18,8 @@ import type {
   RaceImportData,
   EntryImportData,
   ResultImportData
-} from '../../../types/HorseData';
-import { createTestDb, type TestDatabase } from '../../../test/helpers/testDb';
+} from '@/types/HorseData';
+import { createTestDb, type TestDatabase } from '@/test/helpers/testDb';
 
 /** 全列に値が入るレース */
 const FULL_RACE: RaceImportData = {

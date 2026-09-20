@@ -2,7 +2,7 @@
  * レース1件に確率を付与する（本体モデルと3種のベースライン）
  */
 
-import type { RaceFeatureSet } from '../features/FeatureBuilder';
+import type { RaceFeatureSet } from '@/features/FeatureBuilder';
 import type {
   LogisticModel,
   PredictionResult,

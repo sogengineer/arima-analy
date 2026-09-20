@@ -26,13 +26,13 @@ import type {
   JockeyVenueStats,
   JockeyOverallStats,
   JockeyTrainerComboStats
-} from '../../types/RepositoryTypes';
+} from '@/types/RepositoryTypes';
 import {
   JOCKEY_SCORE_WEIGHTS,
   RELIABILITY_THRESHOLDS,
   getJockeyReliabilityFactor,
   getJockeyG1ReliabilityFactor
-} from '../../constants/ScoringConstants';
+} from '@/constants/ScoringConstants';
 
 import { JockeyBuilder } from './JockeyBuilder';
 

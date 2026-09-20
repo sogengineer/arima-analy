@@ -1,4 +1,4 @@
-import { HorseDataExtractor } from '../utils/HorseDataExtractor';
+import { HorseDataExtractor } from '@/utils/HorseDataExtractor';
 import { writeFileSync } from 'node:fs';
 
 export class ExtractData {
@@ -47,7 +47,7 @@ export class ExtractData {
       console.log('🚀 自動化処理を開始...\n');
       
       // Step 1: HTML取得
-      const { JRAFetcher } = await import('../utils/JRAFetcher.js');
+      const { JRAFetcher } = await import('@/utils/JRAFetcher');
       console.log('📥 ステップ1: HTML取得');
       const fetchResult = await JRAFetcher.fetchAndSave(url, htmlOutput);
       

@@ -15,12 +15,12 @@
 
 import type { Database } from 'bun:sqlite';
 import { sql } from 'kysely';
-import { queryBuilder, runStatement } from '../../database/QueryRunner';
+import { queryBuilder, runStatement } from '@/database/QueryRunner';
 import type {
   RaceImportData,
   EntryImportData,
   ResultImportData
-} from '../../types/HorseData';
+} from '@/types/HorseData';
 
 /**
  * `updated_at` に入れる SQLite の現在時刻

@@ -1,4 +1,4 @@
-import type { PreviousRaceResult } from '../types/HorseData';
+import type { PreviousRaceResult } from '@/types/HorseData';
 
 const PREVIOUS_RACE_POSITIONS: PreviousRaceResult['position'][] = [
   'front',

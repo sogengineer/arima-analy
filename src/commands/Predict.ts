@@ -21,9 +21,9 @@
  * （詳細は `docs/MODELS.md` と `src/features/FeatureBuilder.ts` の冒頭）。
  */
 
-import { DatabaseConnection } from '../database/DatabaseConnection';
-import { RaceQueryRepository } from '../repositories/queries/RaceQueryRepository';
-import { MachineLearningModel, type PredictionResult } from '../models/MachineLearningModel';
+import { DatabaseConnection } from '@/database/DatabaseConnection';
+import { RaceQueryRepository } from '@/repositories/queries/RaceQueryRepository';
+import { MachineLearningModel, type PredictionResult } from '@/models/MachineLearningModel';
 
 /** 馬券推奨の閾値（レース内正規化済み確率に対する基準） */
 export const RECOMMENDATION_THRESHOLDS = {

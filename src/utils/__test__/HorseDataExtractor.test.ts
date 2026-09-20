@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { HorseDataExtractor } from '../HorseDataExtractor';
+import { HorseDataExtractor } from '@/utils/HorseDataExtractor';
 
 /**
  * HorseDataExtractor テスト

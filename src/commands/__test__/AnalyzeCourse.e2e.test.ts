@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createTestDb, seedTestData, type TestDatabase } from '../../test/helpers/testDb';
-import { HorseQueryRepository } from '../../repositories/queries/HorseQueryRepository';
+import { createTestDb, seedTestData, type TestDatabase } from '@/test/helpers/testDb';
+import { HorseQueryRepository } from '@/repositories/queries/HorseQueryRepository';
 
 /**
  * AnalyzeCourse E2Eテスト

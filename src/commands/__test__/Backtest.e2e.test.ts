@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn, jest } from 'bun:test';
-import { createTestDb, seedTestData, type TestDatabase } from '../../test/helpers/testDb';
-import { Backtest } from '../Backtest';
+import { createTestDb, seedTestData, type TestDatabase } from '@/test/helpers/testDb';
+import { Backtest } from '@/commands/Backtest';
 
 /**
  * Backtest E2Eテスト

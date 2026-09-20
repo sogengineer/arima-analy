@@ -5,7 +5,7 @@
  * Backtest コマンドと、その集計・表示モジュールで共有する。
  */
 
-import type { MarketProbSource } from '../../features/MarketProbability';
+import type { MarketProbSource } from '@/features/MarketProbability';
 
 export interface BacktestResult {
   raceId: number;

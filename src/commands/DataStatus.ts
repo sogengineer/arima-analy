@@ -6,12 +6,12 @@
  * レース数・出走行数・結果あり行数・主要特徴量のnull率・期間を表示する。
  */
 
-import { DatabaseConnection } from '../database/DatabaseConnection';
+import { DatabaseConnection } from '@/database/DatabaseConnection';
 import {
   DataStatusQueryRepository,
   type MonitoredColumn,
   type MonitoredTable
-} from '../repositories/queries/DataStatusQueryRepository';
+} from '@/repositories/queries/DataStatusQueryRepository';
 
 /** MLが成立する最低ライン（設計書「1. データ量の実態」） */
 const MIN_ROWS_FOR_ML = 3000;

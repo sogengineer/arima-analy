@@ -10,8 +10,8 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { createTestDb, type TestDatabase } from '../../../test/helpers/testDb';
-import { RaceQueryRepository } from '../RaceQueryRepository';
+import { createTestDb, type TestDatabase } from '@/test/helpers/testDb';
+import { RaceQueryRepository } from '@/repositories/queries/RaceQueryRepository';
 
 let testDb: TestDatabase;
 let repository: RaceQueryRepository;

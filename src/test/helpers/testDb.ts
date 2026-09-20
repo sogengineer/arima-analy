@@ -10,8 +10,8 @@ import { Database } from 'bun:sqlite';
 import { readFileSync, existsSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HorseAggregateRepository } from '../../repositories/aggregates/HorseAggregateRepository';
-import { RaceAggregateRepository } from '../../repositories/aggregates/RaceAggregateRepository';
+import { HorseAggregateRepository } from '@/repositories/aggregates/HorseAggregateRepository';
+import { RaceAggregateRepository } from '@/repositories/aggregates/RaceAggregateRepository';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

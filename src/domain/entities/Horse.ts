@@ -30,11 +30,11 @@
  * ```
  */
 
-import type { HorseDetail, CourseStats, TrackStats } from '../../types/RepositoryTypes';
+import type { HorseDetail, CourseStats, TrackStats } from '@/types/RepositoryTypes';
 import type { RaceResult } from './RaceResult';
 import type { Race } from './Race';
 import type { Jockey } from './Jockey';
-import { ScoreComponents, type ScoreComponentsData } from '../valueObjects/ScoreComponents';
+import { ScoreComponents, type ScoreComponentsData } from '@/domain/valueObjects/ScoreComponents';
 import {
   RECENT_RACE_WEIGHTS,
   getPositionScore,
@@ -50,13 +50,13 @@ import {
   POST_POSITION_SCORES,
   TRACK_CONDITION_WEIGHTS,
   TRACK_CONDITION_DEFAULT_SCORE
-} from '../../constants/ScoringConstants';
+} from '@/constants/ScoringConstants';
 import type { Trainer } from './Trainer';
 import {
   DISTANCE_THRESHOLDS,
   calculateIntervalDays,
   isOptimalRotation
-} from '../../constants/DistanceConstants';
+} from '@/constants/DistanceConstants';
 
 import { HorseBuilder } from './HorseBuilder';
 

@@ -6,7 +6,7 @@
  */
 
 import * as ss from 'simple-statistics';
-import type { MarketProbSource } from '../../features/MarketProbability';
+import type { MarketProbSource } from '@/features/MarketProbability';
 import type {
   BacktestResult,
   BacktestSummary,

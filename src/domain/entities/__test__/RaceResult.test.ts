@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { RaceResult } from '../RaceResult';
-import type { HorseRaceResult } from '../../../types/RepositoryTypes';
+import { RaceResult } from '@/domain/entities/RaceResult';
+import type { HorseRaceResult } from '@/types/RepositoryTypes';
 
 // ============================================
 // テストデータ生成ヘルパー

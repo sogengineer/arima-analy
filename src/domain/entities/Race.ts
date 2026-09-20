@@ -2,7 +2,7 @@
  * レースエンティティ
  */
 
-import { getDistanceCategory } from '../../constants/DistanceConstants';
+import { getDistanceCategory } from '@/constants/DistanceConstants';
 
 /**
  * `Race.fromDbRecord` が読む列だけを表した構造
