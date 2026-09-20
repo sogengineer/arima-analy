@@ -348,11 +348,23 @@ bun start ml
 | `-r, --race <id>` | レースIDを指定 |
 | `-t, --train` | モデルを訓練のみ実行 |
 | `-c, --cross-check` | スコアリング結果とクロスチェック |
+| `-V, --validate` | walk-forward 検証と採用ゲート判定を実行 |
+| `-b, --blocks <number>` | walk-forward の分割数（既定 5） |
+| `-m, --min-train <number>` | 検証ブロックを開始するのに必要な最小学習レース数（既定 150） |
 
 **アルゴリズム:**
 - L2正則化ロジスティック回帰
 - レース内 softmax（conditional logit）による確率較正
 - walk-forward 検証（詳細は [MODELS.md](MODELS.md)）
+- L2強度 λ は各ブロックの **学習窓の内側分割** で自動選択（検証ブロックは使わない）
+
+```bash
+bun start ml --validate                  # 既定（5ブロック / 最小学習150レース）
+bun start ml --validate --min-train 0    # 学習が少ないブロックも評価に含める
+```
+
+> `--min-train` を下回るブロックはスキップされ、総合指標・較正テーブルからも除外される。
+> スキップしたブロックは理由つきで一覧表示される。
 
 ---
 

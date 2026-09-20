@@ -10,12 +10,22 @@ import type {
   CalibrationBin,
   ModelStats,
   PredictionResult,
+  SkippedBlock,
   WalkForwardBlock,
   WalkForwardResult
 } from './MachineLearningTypes';
+import {
+  MARKET_FEATURE_NAMES,
+  SMALL_MODEL_FEATURE_NAMES
+} from '../features/FeatureBuilder';
 
-/** 比較表の1行（ML / 市場のみモデル / 人気別勝率表 / ルールベース） */
-type ComparisonRow = [number, number, number, number];
+/** 小モデルが市場系に足している特徴量の一覧（表示用） */
+const SMALL_MODEL_EXTRA_FEATURES = SMALL_MODEL_FEATURE_NAMES.filter(
+  n => !MARKET_FEATURE_NAMES.includes(n)
+).join('・');
+
+/** 比較表の1行（ML / 小モデル / 市場のみモデル / 人気別勝率表 / ルールベース） */
+type ComparisonRow = [number, number, number, number, number];
 
 /** 重み差の方向を表す矢印 */
 function weightDiffArrow(diff: number): string {
@@ -67,25 +77,49 @@ export function printWalkForward(result: WalkForwardResult): void {
   }
 
   displayBlockTable(result.blocks);
+  displaySkippedBlocks(result.skippedBlocks, result.minTrainRaces);
   displayBaselineComparison(result);
   displayCalibrationTable(result.calibration);
   printGate(result.gate);
 }
 
-/** ブロック別の指標を表示 */
+/** ブロック別の指標を表示（選ばれた λ つき） */
 function displayBlockTable(blocks: WalkForwardBlock[]): void {
   console.log('【ブロック別】');
-  console.log('ブロック  期間                    学習  検証  logloss  top1');
-  console.log('-'.repeat(66));
+  console.log('ブロック  期間                    学習  検証  logloss  top1       λ  内側fold');
+  console.log('-'.repeat(84));
   for (const b of blocks) {
     console.log(
       `  ${b.block.toString().padStart(2)}    ${b.from}〜${b.to}  ${b.trainRaces
         .toString()
         .padStart(4)}  ${b.testRaces.toString().padStart(4)}  ${b.metrics.logLoss
         .toFixed(4)
-        .padStart(7)}  ${(b.metrics.top1Accuracy * 100).toFixed(1).padStart(5)}%`
+        .padStart(7)}  ${(b.metrics.top1Accuracy * 100).toFixed(1).padStart(5)}%  ${formatLambda(
+        b.lambda
+      ).padStart(6)}  ${b.innerFolds.toString().padStart(6)}`
     );
   }
+  console.log('  ※ λ は **各ブロックの学習窓の内側分割だけ** で選択（検証ブロックは使わない）');
+  console.log('  ※ 内側fold=0 は学習窓が短く選択できず既定値へフォールバックしたブロック');
+}
+
+/** λ を読みやすく整形（0.01 〜 100） */
+function formatLambda(lambda: number): string {
+  return lambda >= 1 ? lambda.toString() : lambda.toFixed(2);
+}
+
+/** 学習データ不足でスキップしたブロックを表示 */
+function displaySkippedBlocks(skipped: SkippedBlock[], minTrainRaces: number): void {
+  if (skipped.length === 0) return;
+  console.log(`\n【スキップしたブロック】最小学習レース数 ${minTrainRaces}（--min-train で変更）`);
+  for (const b of skipped) {
+    console.log(
+      `  ${b.block.toString().padStart(2)}    ${b.from}〜${b.to}  検証 ${b.testRaces
+        .toString()
+        .padStart(4)} レース  → ${b.reason}`
+    );
+  }
+  console.log('  ※ スキップしたブロックは総合指標にも較正テーブルにも含めていない');
 }
 
 /** 総合指標と3種のベースラインの比較表を表示 */
@@ -96,29 +130,37 @@ function displayBaselineComparison(result: WalkForwardResult): void {
     `  ※ 人気別勝率テーブルの算出元: 単勝オッズ ${src.odds} レース / 人気順位 ${src.popularity} レース`
     + (src.uniform > 0 ? ` / 一様分布 ${src.uniform} レース` : '')
   );
-  console.log('指標              ML      市場のみモデル  人気別勝率表  ルールベース');
-  console.log('-'.repeat(70));
+  console.log('指標              ML(34次元)    小モデル  市場のみモデル  人気別勝率表  ルールベース');
+  console.log('-'.repeat(86));
   const row = (name: string, values: ComparisonRow, digits = 4) =>
     console.log(
-      `${name.padEnd(16)} ${values[0].toFixed(digits).padStart(8)}  ${values[1]
+      `${name.padEnd(16)} ${values[0].toFixed(digits).padStart(10)}  ${values[1]
         .toFixed(digits)
-        .padStart(12)}  ${values[2].toFixed(digits).padStart(12)}  ${values[3]
+        .padStart(10)}  ${values[2].toFixed(digits).padStart(12)}  ${values[3]
         .toFixed(digits)
-        .padStart(12)}`
+        .padStart(12)}  ${values[4].toFixed(digits).padStart(12)}`
     );
   const ov = result.overall;
+  const sm = result.smallModelBaseline;
   const mm = result.marketModelBaseline;
   const mt = result.marketBaseline;
   const rb = result.ruleBaseline;
-  row('log loss(勝馬)', [ov.logLoss, mm.logLoss, mt.logLoss, rb.logLoss]);
-  row('Brier', [ov.brier, mm.brier, mt.brier, rb.brier]);
-  row('複勝 log loss', [ov.showLogLoss, mm.showLogLoss, mt.showLogLoss, rb.showLogLoss]);
-  row('top-1 的中率', [ov.top1Accuracy, mm.top1Accuracy, mt.top1Accuracy, rb.top1Accuracy], 3);
-  row('top-3 再現率', [ov.top3Recall, mm.top3Recall, mt.top3Recall, rb.top3Recall], 3);
-  row('Spearman', [ov.spearman, mm.spearman, mt.spearman, rb.spearman], 3);
-  row('単勝回収率', [ov.winRoi, mm.winRoi, mt.winRoi, rb.winRoi], 3);
+  row('log loss(勝馬)', [ov.logLoss, sm.logLoss, mm.logLoss, mt.logLoss, rb.logLoss]);
+  row('Brier', [ov.brier, sm.brier, mm.brier, mt.brier, rb.brier]);
+  row('複勝 log loss', [ov.showLogLoss, sm.showLogLoss, mm.showLogLoss, mt.showLogLoss, rb.showLogLoss]);
+  row(
+    'top-1 的中率',
+    [ov.top1Accuracy, sm.top1Accuracy, mm.top1Accuracy, mt.top1Accuracy, rb.top1Accuracy],
+    3
+  );
+  row('top-3 再現率', [ov.top3Recall, sm.top3Recall, mm.top3Recall, mt.top3Recall, rb.top3Recall], 3);
+  row('Spearman', [ov.spearman, sm.spearman, mm.spearman, mt.spearman, rb.spearman], 3);
+  row('単勝回収率', [ov.winRoi, sm.winRoi, mm.winRoi, mt.winRoi, rb.winRoi], 3);
   console.log(
-    '\n  ※ 「市場のみモデル」= 人気・オッズ系特徴量だけを使って同じ手続きで学習した同型モデル'
+    `\n  ※ 「小モデル」= 市場系 + ${SMALL_MODEL_EXTRA_FEATURES} の計 ${SMALL_MODEL_FEATURE_NAMES.length} 次元だけで同じ手続きで学習した同型モデル`
+  );
+  console.log(
+    '  ※ 「市場のみモデル」= 人気・オッズ系特徴量だけを使って同じ手続きで学習した同型モデル'
   );
   console.log(
     '     「人気別勝率表」= 人気順位を固定テーブルで確率化したもの（全馬オッズありならオッズ）'
@@ -163,7 +205,14 @@ export function printGate(gate: AdoptionGate): void {
     `     ※ 参考: 人気別勝率テーブル ${gate.popularityTableLogLoss.toFixed(4)}（固定表なので判定には使わない）`
   );
   console.log(
-    `  ② top-1 > ルールベース:  ${gate.beatsRuleTop1 ? '✅' : '❌'} (ML ${(gate.mlTop1 * 100).toFixed(1)}% vs ルール ${(gate.ruleTop1 * 100).toFixed(1)}%)`
+    `  ② top-1 ≧ 市場のみモデル または Brier ≦ 市場のみモデル: ${gate.beatsMarketRanking ? '✅' : '❌'}`
+  );
+  console.log(
+    `     top-1  ML ${(gate.mlTop1 * 100).toFixed(1)}% vs 市場のみモデル ${(gate.marketTop1 * 100).toFixed(1)}%`
+    + ` / Brier  ML ${gate.mlBrier.toFixed(4)} vs 市場のみモデル ${gate.marketBrier.toFixed(4)}`
+  );
+  console.log(
+    `     ※ 参考: ルールベース top-1 ${(gate.ruleTop1 * 100).toFixed(1)}%（現データではほぼランダムなので判定には使わない）`
   );
   if (gate.passed) {
     console.log('\n  ✅ 判定: ML予測を主軸にしてよい');

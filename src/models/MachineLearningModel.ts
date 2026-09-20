@@ -36,6 +36,7 @@ import type {
   TrainingData,
   TrainingRace,
   TrainOptions,
+  WalkForwardOptions,
   WalkForwardResult
 } from './MachineLearningTypes';
 import { sumOf } from './MachineLearningMath';
@@ -70,6 +71,7 @@ export * from './MachineLearningMath';
 export * from './LogisticRegression';
 export * from './RaceEvaluation';
 export * from './RuleWeightProjection';
+export * from './HyperparameterSelection';
 // ============================================================
 // モデル本体
 // ============================================================
@@ -285,8 +287,17 @@ export class MachineLearningModel {
   // ----------------------------------------------------------
   // walk-forward 検証
   // ----------------------------------------------------------
-  walkForwardValidate(blocks = 5, options: TrainOptions = {}): WalkForwardResult {
-    return runWalkForwardValidation(this.collectTrainingRaces(), blocks, options);
+  /**
+   * walk-forward 検証
+   *
+   * @param options - ブロック数・最小学習レース数・λ候補・温度スケーリングの有無
+   *
+   * @remarks
+   * λ は各ブロックの **学習窓の内側分割** で選ぶ（検証ブロックのデータは使わない）。
+   * 学習レース数が `minTrainRaces` に満たないブロックはスキップし、総合指標から外す。
+   */
+  walkForwardValidate(options: WalkForwardOptions = {}): WalkForwardResult {
+    return runWalkForwardValidation(this.collectTrainingRaces(), options);
   }
 
 
@@ -441,4 +452,9 @@ export class MachineLearningModel {
     }
   }
 }
-export { MIN_TRAINING_SAMPLES, MIN_WALK_FORWARD_RACES } from './MachineLearningConstants';
+export {
+  DEFAULT_L2,
+  DEFAULT_MIN_TRAIN_RACES,
+  MIN_TRAINING_SAMPLES,
+  MIN_WALK_FORWARD_RACES
+} from './MachineLearningConstants';

@@ -106,12 +106,18 @@ program
   .option('-c, --cross-check', 'スコアリング結果とクロスチェック')
   .option('-V, --validate', 'walk-forward 検証と採用ゲート判定を実行')
   .option('-b, --blocks <number>', 'walk-forward の分割数', parseInt, 5)
+  .option(
+    '-m, --min-train <number>',
+    '検証ブロックを開始するのに必要な最小学習レース数（少データでの不安定なブロックを除外）',
+    parseInt
+  )
   .action(async (options: {
     race?: string;
     train?: boolean;
     crossCheck?: boolean;
     validate?: boolean;
     blocks?: number;
+    minTrain?: number;
   }) => {
     const { MachineLearningModel } = await import('./models/MachineLearningModel.js');
     const { DatabaseConnection } = await import('./database/DatabaseConnection.js');
@@ -124,7 +130,10 @@ program
     try {
       // walk-forward 検証（採用ゲート判定）
       if (options.validate) {
-        const result = ml.walkForwardValidate(options.blocks ?? 5);
+        const result = ml.walkForwardValidate({
+          blocks: options.blocks ?? 5,
+          minTrainRaces: options.minTrain
+        });
         ml.displayWalkForward(result);
         return;
       }

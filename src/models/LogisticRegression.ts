@@ -10,6 +10,7 @@ import {
   standardize,
   sumOf
 } from './MachineLearningMath';
+import { DEFAULT_L2 } from './MachineLearningConstants';
 
 /** 標準化済み1行分のロジット（バイアス込み） */
 function logitOf(row: number[], weights: number[], bias: number): number {
@@ -74,7 +75,7 @@ export function trainL2Logistic(
   y: number[],
   options: TrainOptions = {}
 ): LogisticModel {
-  const l2 = options.l2 ?? 1.0;
+  const l2 = options.l2 ?? DEFAULT_L2;
   const d = X[0]?.length ?? 0;
   const n = X.length;
   const { mean, std } = computeStandardization(X);

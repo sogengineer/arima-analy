@@ -4,6 +4,7 @@
 
 import type {
   AdoptionGate,
+  SkippedBlock,
   EvaluationMetrics,
   ScoredRace,
   TrainingSample,
@@ -200,23 +201,33 @@ function finalizeMetrics(races: number, acc: MetricsAccumulator): EvaluationMetr
 }
 
 /** 検証が成立しなかったときの結果 */
-export function emptyWalkForwardResult(reason: string): WalkForwardResult {
+export function emptyWalkForwardResult(
+  reason: string,
+  minTrainRaces = 0,
+  skippedBlocks: SkippedBlock[] = []
+): WalkForwardResult {
   return {
     overall: emptyMetrics(),
     marketModelBaseline: emptyMetrics(),
     marketBaseline: emptyMetrics(),
+    smallModelBaseline: emptyMetrics(),
     marketSourceCounts: { odds: 0, popularity: 0, uniform: 0 },
     ruleBaseline: emptyMetrics(),
     blocks: [],
+    skippedBlocks,
+    minTrainRaces,
     calibration: [],
     gate: {
       beatsMarketLogLoss: false,
-      beatsRuleTop1: false,
+      beatsMarketRanking: false,
       passed: false,
       mlLogLoss: 0,
       marketLogLoss: 0,
       popularityTableLogLoss: 0,
       mlTop1: 0,
+      marketTop1: 0,
+      mlBrier: 0,
+      marketBrier: 0,
       ruleTop1: 0
     },
     insufficientReason: reason
@@ -236,7 +247,19 @@ export function collectWinProbsAndLabels(scored: ScoredRace[]): { probs: number[
   return { probs, labels };
 }
 
-/** 採用ゲートの判定 */
+/**
+ * 採用ゲートの判定
+ *
+ * @remarks
+ * 2条件とも **市場のみモデル** を基準にする。
+ *
+ * - ① 勝ち馬 log loss が市場のみモデルより小さい（確率としての良さ）
+ * - ② top-1 が市場のみモデル以上 **または** Brier が市場のみモデル以下（順位づけ・二乗誤差）
+ *
+ * 旧ゲート②「top-1 > ルールベース」は、実データでルールベースの top-1 が
+ * 9.9%（16頭立てのランダム相当）しか出ず、どんなモデルでも通ってしまうため廃止した。
+ * ルールベースの top-1 は参考値として残す（`ruleTop1`）。
+ */
 export function buildAdoptionGate(
   overall: EvaluationMetrics,
   marketModelBaseline: EvaluationMetrics,
@@ -244,15 +267,20 @@ export function buildAdoptionGate(
   ruleBaseline: EvaluationMetrics
 ): AdoptionGate {
   const beatsMarketLogLoss = overall.logLoss < marketModelBaseline.logLoss;
-  const beatsRuleTop1 = overall.top1Accuracy > ruleBaseline.top1Accuracy;
+  const beatsMarketRanking =
+    overall.top1Accuracy >= marketModelBaseline.top1Accuracy ||
+    overall.brier <= marketModelBaseline.brier;
   return {
     beatsMarketLogLoss,
-    beatsRuleTop1,
-    passed: beatsMarketLogLoss && beatsRuleTop1,
+    beatsMarketRanking,
+    passed: beatsMarketLogLoss && beatsMarketRanking,
     mlLogLoss: overall.logLoss,
     marketLogLoss: marketModelBaseline.logLoss,
     popularityTableLogLoss: marketBaseline.logLoss,
     mlTop1: overall.top1Accuracy,
+    marketTop1: marketModelBaseline.top1Accuracy,
+    mlBrier: overall.brier,
+    marketBrier: marketModelBaseline.brier,
     ruleTop1: ruleBaseline.top1Accuracy
   };
 }

@@ -188,7 +188,7 @@ describe('MachineLearningModel E2E（合成データ）', () => {
       seedSyntheticRaces(testDb, { races: 40, horsesPerRace: 10, seed: 9 });
       ml = new MachineLearningModel(testDb.db);
 
-      const result = ml.walkForwardValidate(5);
+      const result = ml.walkForwardValidate({ blocks: 5, minTrainRaces: 0 });
 
       expect(result.insufficientReason).toBeUndefined();
       expect(result.blocks.length).toBeGreaterThan(0);
@@ -213,7 +213,7 @@ describe('MachineLearningModel E2E（合成データ）', () => {
       seedSyntheticRaces(testDb, { races: 40, horsesPerRace: 8, seed: 10 });
       ml = new MachineLearningModel(testDb.db);
 
-      const result = ml.walkForwardValidate(4);
+      const result = ml.walkForwardValidate({ blocks: 4, minTrainRaces: 0 });
 
       for (let i = 1; i < result.blocks.length; i++) {
         // 後のブロックほど後の期間
@@ -241,7 +241,7 @@ describe('MachineLearningModel E2E（合成データ）', () => {
       ).d;
       expect(dayCount).toBe(12);
 
-      const result = ml.walkForwardValidate(4);
+      const result = ml.walkForwardValidate({ blocks: 4, minTrainRaces: 0 });
       expect(result.blocks.length).toBeGreaterThan(0);
 
       // 学習窓は「評価ブロックの開始インデックスより前のレース全部」の連続した前置きなので、
@@ -281,7 +281,7 @@ describe('MachineLearningModel E2E（合成データ）', () => {
       ).c;
       expect(nonWinnerFinalOdds).toBe(0);
 
-      const result = ml.walkForwardValidate(4);
+      const result = ml.walkForwardValidate({ blocks: 4, minTrainRaces: 0 });
 
       // 評価自体は行われる
       expect(result.overall.races).toBeGreaterThan(0);
@@ -298,19 +298,24 @@ describe('MachineLearningModel E2E（合成データ）', () => {
       seedSyntheticRaces(testDb, { races: 40, horsesPerRace: 10, seed: 11 });
       ml = new MachineLearningModel(testDb.db);
 
-      const result = ml.walkForwardValidate(5);
+      const result = ml.walkForwardValidate({ blocks: 5, minTrainRaces: 0 });
       const gate = result.gate;
 
       expect(gate.beatsMarketLogLoss).toBe(gate.mlLogLoss < gate.marketLogLoss);
-      expect(gate.beatsRuleTop1).toBe(gate.mlTop1 > gate.ruleTop1);
-      expect(gate.passed).toBe(gate.beatsMarketLogLoss && gate.beatsRuleTop1);
+      // ゲート②は市場のみモデル基準（top-1 以上 または Brier 以下）
+      expect(gate.beatsMarketRanking).toBe(
+        gate.mlTop1 >= gate.marketTop1 || gate.mlBrier <= gate.marketBrier
+      );
+      expect(gate.passed).toBe(gate.beatsMarketLogLoss && gate.beatsMarketRanking);
+      // ルールベース top-1 は参考表示として残るが判定には使わない
+      expect(gate.ruleTop1).toBeGreaterThanOrEqual(0);
     });
 
     it('較正テーブルを出力する（合計件数が評価出走数と一致）', () => {
       seedSyntheticRaces(testDb, { races: 40, horsesPerRace: 10, seed: 12 });
       ml = new MachineLearningModel(testDb.db);
 
-      const result = ml.walkForwardValidate(5);
+      const result = ml.walkForwardValidate({ blocks: 5, minTrainRaces: 0 });
       const total = sumBy(result.calibration, b => b.count);
 
       expect(result.calibration).toHaveLength(10);
@@ -328,7 +333,7 @@ describe('MachineLearningModel E2E（合成データ）', () => {
       });
       ml = new MachineLearningModel(testDb.db);
 
-      const result = ml.walkForwardValidate(5);
+      const result = ml.walkForwardValidate({ blocks: 5, minTrainRaces: 0 });
 
       expect(result.insufficientReason).toBeDefined();
       expect(result.blocks).toHaveLength(0);
@@ -339,8 +344,8 @@ describe('MachineLearningModel E2E（合成データ）', () => {
       seedSyntheticRaces(testDb, { races: 30, horsesPerRace: 8, seed: 14 });
       ml = new MachineLearningModel(testDb.db);
 
-      const a = ml.walkForwardValidate(4);
-      const b = ml.walkForwardValidate(4);
+      const a = ml.walkForwardValidate({ blocks: 4, minTrainRaces: 0 });
+      const b = ml.walkForwardValidate({ blocks: 4, minTrainRaces: 0 });
 
       expect(b.overall.logLoss).toBe(a.overall.logLoss);
       expect(b.overall.top1Accuracy).toBe(a.overall.top1Accuracy);

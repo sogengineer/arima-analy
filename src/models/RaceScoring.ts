@@ -24,10 +24,29 @@ export function scoreRace(
   winModel: LogisticModel,
   showModel: LogisticModel
 ): ScoredRace {
-  const logits = samples.map(s => linearScore(winModel, s.vector));
-  const winProbs = softmax(logits);
+  const winProbs = softmax(samples.map(s => linearScore(winModel, s.vector)));
   const showProbs = calibrateShowProbabilities(
     samples.map(s => predictProbability(showModel, s.vector))
+  );
+  return { samples, winProbs, showProbs };
+}
+
+/**
+ * 特徴量をマスクした同型モデルでレース1件に確率を付与する
+ *
+ * @remarks
+ * 「市場のみモデル」「小モデル」のように、次元は同じまま一部の特徴量だけを
+ * 使うベースラインを、本体とまったく同じ softmax / 較正経路で評価するための入口。
+ */
+export function scoreRaceWithMask(
+  samples: TrainingSample[],
+  models: { win: LogisticModel; show: LogisticModel },
+  mask: (vector: number[]) => number[]
+): ScoredRace {
+  const masked = samples.map(s => mask(s.vector));
+  const winProbs = softmax(masked.map(v => linearScore(models.win, v)));
+  const showProbs = calibrateShowProbabilities(
+    masked.map(v => predictProbability(models.show, v))
   );
   return { samples, winProbs, showProbs };
 }
@@ -82,12 +101,7 @@ export function scoreRaceByMarketModel(
   winModel: LogisticModel,
   showModel: LogisticModel
 ): ScoredRace {
-  const masked = samples.map(s => maskToMarketFeatures(s.vector));
-  const winProbs = softmax(masked.map(v => linearScore(winModel, v)));
-  const showProbs = calibrateShowProbabilities(
-    masked.map(v => predictProbability(showModel, v))
-  );
-  return { samples, winProbs, showProbs };
+  return scoreRaceWithMask(samples, { win: winModel, show: showModel }, maskToMarketFeatures);
 }
 
 /** 特徴量寄与度（全頭で共有する説明用の並び） */
