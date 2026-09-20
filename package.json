@@ -35,6 +35,7 @@
   "dependencies": {
     "commander": "^11.1.0",
     "iconv-lite": "^0.7.1",
+    "kysely": "^0.29.6",
     "ml-matrix": "^6.10.0",
     "simple-statistics": "^7.8.8"
   }
