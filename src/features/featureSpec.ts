@@ -211,6 +211,41 @@ export const MARKET_FEATURE_INDICES: readonly number[] = FEATURE_NAMES.map((n, i
   MARKET_FEATURE_NAMES.includes(n) ? i : -1
 ).filter(i => i >= 0);
 
+/**
+ * 小モデルの特徴量名（市場系 + 少数の強い特徴）
+ *
+ * @remarks
+ * 34次元の本体モデルは 227レース規模では次元過多で、較正テーブルが示すとおり
+ * 自信過剰（予測50%超の帯で実績が大きく下回る）になる。そこで
+ * **市場系6本 + 4本** の10次元だけを使う小モデルを同じ手続きで並走させ、
+ * 「次元を削れば少データでも市場に追いつけるのか」を同じ表で読めるようにする。
+ *
+ * 追加4本を選んだ理由:
+ *
+ * | 特徴量 | 理由 |
+ * |--------|------|
+ * | `前走有無` | 前走系3本の欠損フラグ。これが無いと「前走なし＝0」が数値として効いてしまう |
+ * | `前走着順相対` | 直前の実力の最も素直な要約。頭数で正規化してあるのでレース間で比較できる |
+ * | `前走上がり3F` | 着順に出ない末脚を拾う唯一の生特徴（基準36秒との差） |
+ * | `斤量相対` | ハンデ＝主催者による能力評価。市場とは独立に付けられた外部情報 |
+ *
+ * 逆に外したもの: 通算成績3本（`career_*` は出馬表インポート経由でしか入らず
+ * 実データでは欠損が多い）、馬体重系（レース内 z-score は当日情報で分散が大きい）、
+ * ルールベース派生14本（市場系と強く相関し、少データでは係数が不安定になる）。
+ */
+export const SMALL_MODEL_FEATURE_NAMES: readonly string[] = [
+  ...MARKET_FEATURE_NAMES,
+  '前走有無',
+  '前走着順相対',
+  '前走上がり3F',
+  '斤量相対'
+];
+
+/** 小モデル特徴量のベクトル内インデックス */
+export const SMALL_MODEL_FEATURE_INDICES: readonly number[] = FEATURE_NAMES.map((n, i) =>
+  SMALL_MODEL_FEATURE_NAMES.includes(n) ? i : -1
+).filter(i => i >= 0);
+
 /** 特徴量の次元数 */
 export const FEATURE_DIMENSION = FEATURE_SPECS.length;
 

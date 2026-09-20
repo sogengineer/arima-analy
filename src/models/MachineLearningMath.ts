@@ -5,7 +5,7 @@
  * 学習そのものは `LogisticRegression`、評価は `RaceEvaluation` にある。
  */
 
-import { MARKET_FEATURE_INDICES } from '../features/FeatureBuilder';
+import { MARKET_FEATURE_INDICES, SMALL_MODEL_FEATURE_INDICES } from '../features/FeatureBuilder';
 import type { CalibrationBin } from './MachineLearningTypes';
 
 /** 配列の総和（加算は先頭から順に行う） */
@@ -298,8 +298,24 @@ export function splitRacesIntoDateBlocks(dates: string[], blocks: number): numbe
  * （ゼロ列は標準偏差0として扱われ、係数が動かない）。
  */
 export function maskToMarketFeatures(vector: number[]): number[] {
+  return maskToIndices(vector, MARKET_FEATURE_INDICES);
+}
+
+/**
+ * 小モデル（市場系 + 少数の強い特徴）の特徴量だけを残したベクトルを返す
+ *
+ * @remarks
+ * 少データで34次元が過剰かどうかを同じ walk-forward 手続きで比較するための
+ * 並走モデル用（`SMALL_MODEL_FEATURE_NAMES` に理由を記載）。
+ */
+export function maskToSmallModelFeatures(vector: number[]): number[] {
+  return maskToIndices(vector, SMALL_MODEL_FEATURE_INDICES);
+}
+
+/** 指定インデックス以外をゼロ埋めする（次元数は変えない） */
+function maskToIndices(vector: number[], indices: readonly number[]): number[] {
   const masked = new Array<number>(vector.length).fill(0);
-  for (const i of MARKET_FEATURE_INDICES) {
+  for (const i of indices) {
     masked[i] = vector[i] ?? 0;
   }
   return masked;
