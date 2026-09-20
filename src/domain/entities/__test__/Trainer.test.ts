@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { Trainer, TrainerBuilder } from '../Trainer';
-import { TRAINER_SCORE_WEIGHTS } from '../../../constants/ScoringConstants';
+import { Trainer } from '../Trainer';
 
 // ============================================
 // calculateScore テスト

@@ -74,14 +74,14 @@ export class RaceResult {
    * 連対（2着以内）か
    */
   isPlace(): boolean {
-    return this.data.finish_position !== undefined && this.data.finish_position <= 2;
+    return this.data.finish_position != null && this.data.finish_position <= 2;
   }
 
   /**
    * 複勝圏内（3着以内）か
    */
   isShow(): boolean {
-    return this.data.finish_position !== undefined && this.data.finish_position <= 3;
+    return this.data.finish_position != null && this.data.finish_position <= 3;
   }
 
   /**

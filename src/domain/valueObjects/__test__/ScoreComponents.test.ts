@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { ScoreComponents, ScoreComponentsData } from '../ScoreComponents';
+import { ScoreComponents, type ScoreComponentsData } from '../ScoreComponents';
 import { SCORE_WEIGHTS } from '../../../constants/ScoringConstants';
 
 // ============================================

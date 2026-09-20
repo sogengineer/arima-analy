@@ -3,6 +3,7 @@
  */
 
 import type { RaceWithVenue } from '../../types/RepositoryTypes';
+import { getDistanceCategory } from '../../constants/DistanceConstants';
 
 export interface RaceData {
   id: number;
@@ -13,6 +14,7 @@ export interface RaceData {
   date: string;
   raceClass?: string;
   trackCondition?: string;
+  totalHorses?: number;
 }
 
 export class Race {
@@ -50,6 +52,10 @@ export class Race {
     return this.data.trackCondition;
   }
 
+  get totalHorses(): number | undefined {
+    return this.data.totalHorses;
+  }
+
   /**
    * G1レースか
    */
@@ -78,10 +84,7 @@ export class Race {
    * 距離カテゴリを取得
    */
   getDistanceCategory(): string {
-    if (this.data.distance < 1400) return '短距離';
-    if (this.data.distance < 1800) return 'マイル';
-    if (this.data.distance < 2200) return '中距離';
-    return '長距離';
+    return getDistanceCategory(this.data.distance);
   }
 
   /**
@@ -96,7 +99,8 @@ export class Race {
       raceType: record.race_type ?? '芝',
       date: record.race_date,
       raceClass: record.race_class,
-      trackCondition: record.track_condition
+      trackCondition: record.track_condition,
+      totalHorses: record.total_horses
     });
   }
 

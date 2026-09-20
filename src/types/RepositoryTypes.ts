@@ -131,11 +131,13 @@ export interface HorseScoreRecord {
   recent_performance_score: number;
   course_aptitude_score: number;
   distance_aptitude_score: number;
-  track_condition_score?: number;
   last_3f_ability_score: number;
-  bloodline_score: number;
+  g1_achievement_score: number;
   rotation_score: number;
+  track_condition_score: number;
   jockey_score: number;
+  trainer_score: number;
+  post_position_score: number;
   total_score?: number;
 }
 

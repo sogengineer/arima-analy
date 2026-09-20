@@ -1,5 +1,7 @@
 export interface HorseBasicInfo {
   name: string;
+  /** 血統登録番号（JRA公式の10桁）。取得できた場合のみ */
+  jraHorseId?: string;
   age: number;
   sex: '牡' | '牝' | '騸';
   color: string;
@@ -24,15 +26,27 @@ export interface RaceInfo {
   frameNumber: number;  // 枠番
   horseNumber: number;  // 馬番
   assignedWeight: number; // 負担重量 (kg)
-  winOdds: number;      // 単勝オッズ
-  popularity: number;   // 人気順位
+  /** 単勝オッズ。取得できなければ undefined（0 は入れない） */
+  winOdds?: number;
+  /** 人気順位（1が1番人気）。取得できなければ undefined（0 は入れない） */
+  popularity?: number;
+  horseWeight?: number;   // 馬体重 (kg)
+  weightChange?: number;  // 前走からの増減 (kg)
 }
 
+/**
+ * 通算成績
+ *
+ * @remarks
+ * JRAの成績表記 `(1着.2着.3着.着外)` に対応する。
+ * `runs` は表記の4項目の **合計（出走数）** であり、着外回数ではない。
+ * DB の `race_entries.career_*` と同じ意味に揃えてある。
+ */
 export interface RaceRecord {
-  wins: number;    // 勝利数
+  wins: number;    // 1着回数
   places: number;  // 2着回数
   shows: number;   // 3着回数
-  runs: number;    // 出走回数
+  runs: number;    // 出走回数（1着+2着+3着+着外）
   prizeMoney?: string; // 総賞金
 }
 
@@ -180,6 +194,12 @@ export interface DBRace {
   total_horses?: number;
   prize_money?: string;
   jra_race_id?: string;
+  grade?: string;
+  course_detail?: string;
+  weather?: string;
+  start_time?: string;
+  kaisai_label?: string;
+  lap_times?: string;
 }
 
 export interface DBRaceEntry {
@@ -217,6 +237,7 @@ export interface DBRaceResult {
   corner_positions?: string;
   final_win_odds?: number;
   final_place_odds?: number;
+  rating?: number;
 }
 
 // ビュー型
@@ -261,6 +282,8 @@ export interface RaceResultDetail {
 // インポート用データ型
 export interface HorseImportData {
   name: string;
+  /** 血統登録番号（JRA公式の10桁）。同名馬を区別する唯一のキー */
+  jraHorseId?: string;
   birthYear?: number;
   sex?: '牡' | '牝' | '騸';
   sire?: string;
@@ -282,10 +305,26 @@ export interface RaceImportData {
   distance: number;
   trackCondition?: '良' | '稍重' | '重' | '不良';
   totalHorses?: number;
+  /** G1 / G2 / G3 / J.G1（重賞のみ） */
+  grade?: string;
+  /** 「芝・右 外」等のコース詳細 */
+  courseDetail?: string;
+  /** 3歳以上 など */
+  ageCondition?: string;
+  sexCondition?: string;
+  /** 定量 / 別定 / ハンデ / 馬齢 */
+  weightCondition?: string;
+  weather?: string;
+  startTime?: string;
+  /** 「4回中山5日」 */
+  kaisaiLabel?: string;
+  /** ハロンタイム */
+  lapTimes?: string;
 }
 
 export interface EntryImportData {
   horseName: string;
+  jraHorseId?: string;  // 血統登録番号（最優先の馬特定キー）
   sireName?: string;    // 父名（馬の一意特定用）
   mareName?: string;    // 母名（馬の一意特定用）
   jockeyName: string;
@@ -295,6 +334,7 @@ export interface EntryImportData {
   winOdds?: number;
   popularity?: number;
   horseWeight?: number;
+  weightChange?: number;
   careerWins?: number;
   careerPlaces?: number;
   careerShows?: number;
@@ -306,7 +346,16 @@ export interface ResultImportData {
   finishPosition?: number;
   finishStatus?: '完走' | '取消' | '除外' | '中止' | '失格' | '降着';
   finishTime?: string;
+  finishTimeMs?: number;
   margin?: string;
+  marginSeconds?: number;
   last3fTime?: number;
+  last3fRank?: number;
   cornerPositions?: string;
+  /** 確定単勝オッズ（単勝払戻金/100） */
+  finalWinOdds?: number;
+  /** 確定複勝オッズ（複勝払戻金/100） */
+  finalPlaceOdds?: number;
+  /** JRA公式レーティング */
+  rating?: number;
 }

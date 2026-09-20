@@ -5,13 +5,17 @@
  * 馬の基本情報、血統情報、レース履歴、コース・馬場別成績を保持し、
  * スコア計算のビジネスロジックを内包
  *
- * スコア計算項目（6項目、計85%）:
- * - 直近成績スコア（25%）
- * - コース適性スコア（18%）
- * - 距離適性スコア（15%）
- * - 上がり3F能力スコア（7%）
+ * 馬自身で計算するスコア項目（8項目、計84%）:
+ * - 直近成績スコア（22%）
+ * - コース適性スコア（15%）
+ * - 距離適性スコア（12%）
+ * - 上がり3F能力スコア（10%）
  * - G1実績スコア（5%）
- * - ローテーション適性スコア（15%）
+ * - ローテーション適性スコア（10%）
+ * - 馬場適性スコア（5%）
+ * - 枠順効果スコア（5%）
+ *
+ * 残りの騎手（8%）・調教師（8%）は Jockey / Trainer エンティティに委譲する。
  *
  * @example
  * ```typescript
@@ -27,9 +31,9 @@
  */
 
 import type { HorseDetail, CourseStats, TrackStats } from '../../types/RepositoryTypes';
-import { RaceResult } from './RaceResult';
-import { Race } from './Race';
-import { Jockey } from './Jockey';
+import type { RaceResult } from './RaceResult';
+import type { Race } from './Race';
+import type { Jockey } from './Jockey';
 import { ScoreComponents, type ScoreComponentsData } from '../valueObjects/ScoreComponents';
 import {
   RECENT_RACE_WEIGHTS,
@@ -43,15 +47,20 @@ import {
   VENUE_APTITUDE_WEIGHTS,
   DISTANCE_APTITUDE_WEIGHTS,
   getPostPositionScore,
+  POST_POSITION_SCORES,
   TRACK_CONDITION_WEIGHTS,
   TRACK_CONDITION_DEFAULT_SCORE
 } from '../../constants/ScoringConstants';
-import { Trainer } from './Trainer';
+import type { Trainer } from './Trainer';
 import {
   DISTANCE_THRESHOLDS,
   calculateIntervalDays,
   isOptimalRotation
 } from '../../constants/DistanceConstants';
+
+import { HorseBuilder } from './HorseBuilder';
+
+export { HorseBuilder };
 
 /**
  * 馬エンティティの構築データ
@@ -137,13 +146,15 @@ export class Horse {
    * @param race - レースエンティティ
    * @param trainer - 調教師エンティティ（null可）
    * @param postPosition - 枠番（1-8、省略時は中間値）
+   * @param trainerId - 調教師ID（騎手×調教師コンビ成績の参照に使用、省略可）
    * @returns スコア構成要素
    */
   calculateTotalScore(
     jockey: Jockey | null,
     race: Race,
     trainer: Trainer | null = null,
-    postPosition?: number
+    postPosition?: number,
+    trainerId?: number
   ): ScoreComponents {
     const componentsData: ScoreComponentsData = {
       recentPerformanceScore: this.calculateRecentPerformanceScore(),
@@ -152,9 +163,9 @@ export class Horse {
       last3FAbilityScore: this.calculateLast3FAbilityScore(),
       g1AchievementScore: this.calculateG1AchievementScore(),
       rotationAptitudeScore: this.calculateRotationAptitudeScore(),
-      jockeyScore: jockey?.calculateScore(race.venue) ?? 0,
+      jockeyScore: jockey?.calculateScore(race.venue, trainerId) ?? 0,
       trackConditionScore: this.calculateTrackConditionAptitudeScore(race.trackCondition ?? '良'),
-      postPositionScore: postPosition ? getPostPositionScore(postPosition) : TRACK_CONDITION_DEFAULT_SCORE,
+      postPositionScore: postPosition ? getPostPositionScore(postPosition) : POST_POSITION_SCORES.default,
       trainerScore: trainer?.calculateScore() ?? 0
     };
 
@@ -162,7 +173,7 @@ export class Horse {
   }
 
   /**
-   * 直近成績スコアを計算（25%）
+   * 直近成績スコアを計算（22%）
    *
    * @remarks
    * 直近5戦の成績を重み付けで評価。
@@ -208,7 +219,7 @@ export class Horse {
   }
 
   /**
-   * コース適性スコアを計算（18%）
+   * コース適性スコアを計算（15%）
    *
    * @remarks
    * 指定会場での勝率（60%）と連対率（40%）から算出。
@@ -218,10 +229,17 @@ export class Horse {
    * @returns スコア（0-100）
    */
   calculateVenueAptitudeScore(venue: string): number {
-    const venueStats = this.data.courseStats.find(s => s.venue_name === venue);
+    // 芝ダ・距離カテゴリ別の集計を会場単位に合算する。
+    const venueStats = { runs: 0, wins: 0, places: 0 };
+    for (const stats of this.data.courseStats) {
+      if (stats.venue_name !== venue) continue;
+      venueStats.runs += stats.runs;
+      venueStats.wins += stats.wins;
+      venueStats.places += stats.places ?? 0;
+    }
 
     // 会場での出走実績がない場合は中間値を返す（初出走馬対応）
-    if (!venueStats || venueStats.runs === 0) return 50;
+    if (venueStats.runs === 0) return 50;
 
     const winRate = venueStats.wins / venueStats.runs;
     const placeRate = (venueStats.wins + (venueStats.places ?? 0)) / venueStats.runs;
@@ -237,7 +255,7 @@ export class Horse {
   }
 
   /**
-   * 距離適性スコアを計算（15%）
+   * 距離適性スコアを計算（12%）
    *
    * @remarks
    * 目標距離±300mの範囲でのレース成績から算出。
@@ -277,7 +295,7 @@ export class Horse {
   }
 
   /**
-   * 上がり3F能力スコアを計算（7%）
+   * 上がり3F能力スコアを計算（10%）
    *
    * @remarks
    * 上がり3Fタイムがある場合: 基準時間（37秒）との差から算出
@@ -292,7 +310,11 @@ export class Horse {
     const withLast3F = this.data.raceResults.filter(r => r.last3FTime != null);
 
     if (withLast3F.length > 0) {
-      const avgTime = withLast3F.reduce((sum, r) => sum + (r.last3FTime ?? 0), 0) / withLast3F.length;
+      let last3FSum = 0;
+      for (const result of withLast3F) {
+        last3FSum += result.last3FTime ?? 0;
+      }
+      const avgTime = last3FSum / withLast3F.length;
       const score = Math.max(
         0,
         ((LAST_3F_PARAMS.baseTime - avgTime) / LAST_3F_PARAMS.divisor) * 100
@@ -334,7 +356,7 @@ export class Horse {
   }
 
   /**
-   * ローテーション適性スコアを計算（15%）
+   * ローテーション適性スコアを計算（10%）
    *
    * @remarks
    * 適正出走間隔（3〜10週間）での好走率を評価。
@@ -467,91 +489,5 @@ export class Horse {
    */
   static builder(id: number, name: string): HorseBuilder {
     return new HorseBuilder(id, name);
-  }
-}
-
-/**
- * Horse エンティティのビルダー
- *
- * @remarks
- * Fluent API パターンで Horse エンティティを構築する。
- *
- * @example
- * ```typescript
- * const horse = Horse.builder(1, 'イクイノックス')
- *   .withDetail(detail)
- *   .withRaceResults(results)
- *   .build();
- * ```
- */
-export class HorseBuilder {
-  private detail?: HorseDetail;
-  private raceResults: RaceResult[] = [];
-  private courseStats: CourseStats[] = [];
-  private trackStats: TrackStats[] = [];
-
-  constructor(
-    private readonly id: number,
-    private readonly name: string
-  ) {}
-
-  /**
-   * 馬詳細情報を設定
-   *
-   * @param detail - 馬詳細情報
-   * @returns this
-   */
-  withDetail(detail: HorseDetail): HorseBuilder {
-    this.detail = detail;
-    return this;
-  }
-
-  /**
-   * レース結果履歴を設定
-   *
-   * @param results - レース結果の配列
-   * @returns this
-   */
-  withRaceResults(results: RaceResult[]): HorseBuilder {
-    this.raceResults = results;
-    return this;
-  }
-
-  /**
-   * コース別成績を設定
-   *
-   * @param stats - コース別成績の配列
-   * @returns this
-   */
-  withCourseStats(stats: CourseStats[]): HorseBuilder {
-    this.courseStats = stats;
-    return this;
-  }
-
-  /**
-   * 馬場別成績を設定
-   *
-   * @param stats - 馬場別成績の配列
-   * @returns this
-   */
-  withTrackStats(stats: TrackStats[]): HorseBuilder {
-    this.trackStats = stats;
-    return this;
-  }
-
-  /**
-   * Horse エンティティを構築
-   *
-   * @returns Horse インスタンス
-   */
-  build(): Horse {
-    return new Horse({
-      id: this.id,
-      name: this.name,
-      detail: this.detail,
-      raceResults: this.raceResults,
-      courseStats: this.courseStats,
-      trackStats: this.trackStats
-    });
   }
 }

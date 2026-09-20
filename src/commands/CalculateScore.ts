@@ -57,12 +57,7 @@ export class CalculateScore {
 
       // レース指定がない場合
       if (!options.race) {
-        console.log('⚠️  レースを指定してください\n');
-        console.log('使い方:');
-        console.log('  arima score --race <レースID>   # レースIDで指定');
-        console.log('  arima score --race 有馬         # レース名で検索');
-        console.log('  arima score --list              # レース一覧表示\n');
-        this.displayRaceList();
+        this.displayUsage();
         return;
       }
 
@@ -85,13 +80,7 @@ export class CalculateScore {
         date: race.race_date
       };
 
-      console.log('🎯 スコアリングモデルで総合評価を算出中...\n');
-      console.log(`🏁 対象レース: ${this.raceInfo.name}`);
-      console.log(`   ${this.raceInfo.date} ${this.raceInfo.venue} ${this.raceInfo.raceType}${this.raceInfo.distance}m\n`);
-      const pct = (v: number) => `${Math.round(v * 100)}%`;
-      console.log('📊 スコア配分（10要素）:');
-      console.log(`  直近成績: ${pct(SCORE_WEIGHTS.recentPerformance)} | ${this.raceInfo.venue}適性: ${pct(SCORE_WEIGHTS.venueAptitude)} | 距離適性: ${pct(SCORE_WEIGHTS.distanceAptitude)} | 上がり3F: ${pct(SCORE_WEIGHTS.last3FAbility)} | G1実績: ${pct(SCORE_WEIGHTS.g1Achievement)}`);
-      console.log(`  ローテ: ${pct(SCORE_WEIGHTS.rotationAptitude)} | 騎手能力: ${pct(SCORE_WEIGHTS.jockey)} | 馬場適性: ${pct(SCORE_WEIGHTS.trackCondition)} | 枠順: ${pct(SCORE_WEIGHTS.postPosition)} | 調教師: ${pct(SCORE_WEIGHTS.trainer)}\n`);
+      this.displayRaceHeader(this.raceInfo);
 
       // ScoringOrchestrator でスコア計算
       const scoreResults = this.orchestrator.calculateScoresForRace(race.id);
@@ -103,43 +92,7 @@ export class CalculateScore {
 
       console.log(`📊 ${scoreResults.length}頭の総合スコアを算出します\n`);
 
-      const horseScores: HorseScore[] = [];
-
-      for (const result of scoreResults) {
-        const components = result.scores.toPlainObject();
-
-        horseScores.push({
-          horseId: result.horseId,
-          horseName: result.horseName,
-          horseNumber: result.horseNumber,
-          totalScore: components.totalScore,
-          recentPerformanceScore: components.recentPerformanceScore,
-          venueAptitudeScore: components.venueAptitudeScore,
-          distanceAptitudeScore: components.distanceAptitudeScore,
-          last3FAbilityScore: components.last3FAbilityScore,
-          g1AchievementScore: components.g1AchievementScore,
-          rotationAptitudeScore: components.rotationAptitudeScore,
-          jockeyScore: components.jockeyScore,
-          trackConditionScore: components.trackConditionScore,
-          postPositionScore: components.postPositionScore,
-          trainerScore: components.trainerScore
-        });
-
-        // DBに保存（10要素構成 + total_score）
-        this.scoreRepo.updateHorseScore(result.horseId, race.id, {
-          recent_performance_score: components.recentPerformanceScore,
-          course_aptitude_score: components.venueAptitudeScore,
-          distance_aptitude_score: components.distanceAptitudeScore,
-          last_3f_ability_score: components.last3FAbilityScore,
-          g1_achievement_score: components.g1AchievementScore,
-          rotation_score: components.rotationAptitudeScore,
-          track_condition_score: components.trackConditionScore,
-          jockey_score: components.jockeyScore,
-          trainer_score: components.trainerScore,
-          post_position_score: components.postPositionScore,
-          total_score: components.totalScore
-        });
-      }
+      const horseScores = this.buildAndSaveScores(scoreResults, race.id);
 
       // スコア順にソート
       horseScores.sort((a, b) => b.totalScore - a.totalScore);
@@ -162,6 +115,79 @@ export class CalculateScore {
     }
   }
 
+  /**
+   * レース未指定時の使い方を表示する
+   */
+  private displayUsage(): void {
+    console.log('⚠️  レースを指定してください\n');
+    console.log('使い方:');
+    console.log('  arima score --race <レースID>   # レースIDで指定');
+    console.log('  arima score --race 有馬         # レース名で検索');
+    console.log('  arima score --list              # レース一覧表示\n');
+    this.displayRaceList();
+  }
+
+  /**
+   * 対象レースとスコア配分の見出しを表示する
+   */
+  private displayRaceHeader(raceInfo: RaceInfo): void {
+    console.log('🎯 スコアリングモデルで総合評価を算出中...\n');
+    console.log(`🏁 対象レース: ${raceInfo.name}`);
+    console.log(`   ${raceInfo.date} ${raceInfo.venue} ${raceInfo.raceType}${raceInfo.distance}m\n`);
+    const pct = (v: number) => `${Math.round(v * 100)}%`;
+    console.log('📊 スコア配分（10要素）:');
+    console.log(`  直近成績: ${pct(SCORE_WEIGHTS.recentPerformance)} | ${raceInfo.venue}適性: ${pct(SCORE_WEIGHTS.venueAptitude)} | 距離適性: ${pct(SCORE_WEIGHTS.distanceAptitude)} | 上がり3F: ${pct(SCORE_WEIGHTS.last3FAbility)} | G1実績: ${pct(SCORE_WEIGHTS.g1Achievement)}`);
+    console.log(`  ローテ: ${pct(SCORE_WEIGHTS.rotationAptitude)} | 騎手能力: ${pct(SCORE_WEIGHTS.jockey)} | 馬場適性: ${pct(SCORE_WEIGHTS.trackCondition)} | 枠順: ${pct(SCORE_WEIGHTS.postPosition)} | 調教師: ${pct(SCORE_WEIGHTS.trainer)}\n`);
+  }
+
+  /**
+   * スコア計算結果を表示用の一覧に詰め替え、あわせて DB に保存する
+   */
+  private buildAndSaveScores(
+    scoreResults: ReturnType<ScoringOrchestrator['calculateScoresForRace']>,
+    raceId: number
+  ): HorseScore[] {
+    const horseScores: HorseScore[] = [];
+
+    for (const result of scoreResults) {
+      const components = result.scores.toPlainObject();
+
+      horseScores.push({
+        horseId: result.horseId,
+        horseName: result.horseName,
+        horseNumber: result.horseNumber,
+        totalScore: components.totalScore,
+        recentPerformanceScore: components.recentPerformanceScore,
+        venueAptitudeScore: components.venueAptitudeScore,
+        distanceAptitudeScore: components.distanceAptitudeScore,
+        last3FAbilityScore: components.last3FAbilityScore,
+        g1AchievementScore: components.g1AchievementScore,
+        rotationAptitudeScore: components.rotationAptitudeScore,
+        jockeyScore: components.jockeyScore,
+        trackConditionScore: components.trackConditionScore,
+        postPositionScore: components.postPositionScore,
+        trainerScore: components.trainerScore
+      });
+
+      // DBに保存（10要素構成 + total_score）
+      this.scoreRepo.updateHorseScore(result.horseId, raceId, {
+        recent_performance_score: components.recentPerformanceScore,
+        course_aptitude_score: components.venueAptitudeScore,
+        distance_aptitude_score: components.distanceAptitudeScore,
+        last_3f_ability_score: components.last3FAbilityScore,
+        g1_achievement_score: components.g1AchievementScore,
+        rotation_score: components.rotationAptitudeScore,
+        track_condition_score: components.trackConditionScore,
+        jockey_score: components.jockeyScore,
+        trainer_score: components.trainerScore,
+        post_position_score: components.postPositionScore,
+        total_score: components.totalScore
+      });
+    }
+
+    return horseScores;
+  }
+
   private displayRaceList(): void {
     const races = this.orchestrator.getAllRaces();
 
@@ -178,8 +204,8 @@ export class CalculateScore {
     for (const race of races.slice(0, 20)) {
       const id = race.id.toString().padStart(3);
       const date = race.race_date;
-      const venue = ((race as any).venue_name || '不明').padEnd(4);
-      const raceNum = (race as any).race_number ? `R${(race as any).race_number}`.padEnd(3) : '-- ';
+      const venue = (race.venue_name || '不明').padEnd(4);
+      const raceNum = race.race_number ? `R${race.race_number}`.padEnd(3) : '-- ';
       const name = race.race_name;
       console.log(`${id}  ${date}  ${venue}  ${raceNum}  ${name}`);
     }
@@ -198,8 +224,7 @@ export class CalculateScore {
     console.log('-'.repeat(90));
 
     scores.forEach((score, index) => {
-      const rank = index + 1;
-      const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '  ';
+      const medal = this.rankMedal(index + 1);
 
       const num = score.horseNumber?.toString().padStart(2) || '--';
       const name = score.horseName.padEnd(14);
@@ -289,5 +314,15 @@ export class CalculateScore {
     const filled = '█'.repeat(filledLength);
     const empty = '░'.repeat(barLength - filledLength);
     return `[${filled}${empty}]`;
+  }
+
+  /**
+   * 順位に対応するメダル表記を返す（4位以降は空白）
+   */
+  private rankMedal(rank: number): string {
+    if (rank === 1) return '🥇';
+    if (rank === 2) return '🥈';
+    if (rank === 3) return '🥉';
+    return '  ';
   }
 }

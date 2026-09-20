@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { Horse, HorseBuilder } from '../Horse';
+import { Horse } from '../Horse';
 import { RaceResult } from '../RaceResult';
 import { Race } from '../Race';
 import { Jockey } from '../Jockey';
@@ -85,9 +85,10 @@ describe('Horse.calculateRecentPerformanceScore', () => {
     const score = horse.calculateRecentPerformanceScore();
 
     // 全勝（1着=100点）×重み合計
-    const expectedScore = RECENT_RACE_WEIGHTS.reduce(
-      (sum, weight) => sum + getPositionScore(1) * weight, 0
-    );
+    let expectedScore = 0;
+    for (const weight of RECENT_RACE_WEIGHTS) {
+      expectedScore += getPositionScore(1) * weight;
+    }
     expect(score).toBeCloseTo(expectedScore, 1);
     expect(score).toBeGreaterThanOrEqual(80);
     expect(score).toBeLessThanOrEqual(100);
@@ -109,9 +110,10 @@ describe('Horse.calculateRecentPerformanceScore', () => {
     const score = horse.calculateRecentPerformanceScore();
 
     // 10着以上はdefault:10点 × 重み合計 = 10点
-    const expectedScore = RECENT_RACE_WEIGHTS.reduce(
-      (sum, weight) => sum + getPositionScore(15) * weight, 0
-    );
+    let expectedScore = 0;
+    for (const weight of RECENT_RACE_WEIGHTS) {
+      expectedScore += getPositionScore(15) * weight;
+    }
     expect(score).toBeCloseTo(expectedScore, 1);
     expect(score).toBeLessThanOrEqual(20);
   });
@@ -201,6 +203,20 @@ describe('Horse.calculateRecentPerformanceScore', () => {
 // ============================================
 
 describe('Horse.calculateVenueAptitudeScore', () => {
+  it('同会場の芝ダ・距離カテゴリを合算し、行順に依存しない', () => {
+    const stats = [
+      createCourseStats({ race_type: '芝', distance_category: '中距離', runs: 1, wins: 1 }),
+      createCourseStats({ race_type: '芝', distance_category: '長距離', runs: 3, places: 1 }),
+      createCourseStats({ race_type: 'ダート', distance_category: 'マイル', runs: 6 }),
+      createCourseStats({ venue_name: '東京', runs: 10, wins: 10 })
+    ];
+    for (const rows of [stats, [...stats].reverse()]) {
+      const horse = Horse.builder(1, 'テスト馬').withCourseStats(rows).build();
+      // 中山の合計10走1勝2連対: 10% * 60 + 20% * 40 = 14
+      expect(horse.calculateVenueAptitudeScore('中山')).toBeCloseTo(14);
+    }
+  });
+
   it('会場実績ありの場合、勝率・連対率を反映したスコアを返す', () => {
     const courseStats: CourseStats[] = [
       createCourseStats({

@@ -37,7 +37,7 @@ export class AnalyzeTrack {
       console.log(`📊 ${horses.length}頭の馬場適性を分析します\n`);
 
       // バッチ取得
-      const horseIds = horses.filter(h => h.id != null).map(h => h.id!);
+      const horseIds = this.collectHorseIds(horses);
       const trackStatsMap = this.horseRepo.getHorsesTrackStatsBatch(horseIds);
 
       const trackConditions = ['良', '稍重', '重', '不良'];
@@ -46,28 +46,16 @@ export class AnalyzeTrack {
       for (const horse of horses) {
         if (!horse.id) continue;
 
-        const horseAnalysis = {
-          name: horse.name,
-          trackStats: {} as Record<string, TrackStats | null>
-        };
-
         console.log(`🐎 ${horse.name} の馬場適性分析:`);
 
         // キャッシュから取得
         const trackStats = trackStatsMap.get(horse.id) ?? [];
+        const horseAnalysis = {
+          name: horse.name,
+          trackStats: this.collectConditionStats(trackStats, trackConditions)
+        };
 
-        for (const condition of trackConditions) {
-          const stats = trackStats.find((s: TrackStats) => s.track_condition === condition);
-          horseAnalysis.trackStats[condition] = stats ?? null;
-
-          if (stats && stats.runs > 0) {
-            const winRate = (stats.wins / stats.runs * 100).toFixed(1);
-            const grade = this.getPerformanceGrade(stats.wins / stats.runs);
-            console.log(`  ${condition}: ${stats.wins}勝/${stats.runs}走 (${winRate}%) ${grade}`);
-          } else {
-            console.log(`  ${condition}: 実績なし`);
-          }
-        }
+        this.displayConditionStats(horseAnalysis.trackStats, trackConditions);
 
         // 最も適性の高い馬場状態を判定
         const bestCondition = this.getBestTrackCondition(horseAnalysis.trackStats);
@@ -86,6 +74,55 @@ export class AnalyzeTrack {
       console.error('❌ 馬場適性分析に失敗:', error);
     } finally {
       this.connection.close();
+    }
+  }
+
+  /**
+   * 詳細付きの馬一覧から、ID を持つ馬の ID だけを取り出す
+   */
+  private collectHorseIds(horses: { id?: number | null }[]): number[] {
+    const horseIds: number[] = [];
+    for (const horse of horses) {
+      if (horse.id != null) {
+        horseIds.push(horse.id);
+      }
+    }
+    return horseIds;
+  }
+
+  /**
+   * 馬場状態ごとの成績を引けるレコードに詰め替える
+   */
+  private collectConditionStats(
+    trackStats: TrackStats[],
+    trackConditions: string[]
+  ): Record<string, TrackStats | null> {
+    const byCondition: Record<string, TrackStats | null> = {};
+    for (const condition of trackConditions) {
+      const stats = trackStats.find((s: TrackStats) => s.track_condition === condition);
+      byCondition[condition] = stats ?? null;
+    }
+    return byCondition;
+  }
+
+  /**
+   * 馬場状態ごとの成績を表示する
+   */
+  private displayConditionStats(
+    byCondition: Record<string, TrackStats | null>,
+    trackConditions: string[]
+  ): void {
+    for (const condition of trackConditions) {
+      const stats = byCondition[condition];
+
+      if (stats && stats.runs > 0) {
+        const winRate = (stats.wins / stats.runs * 100).toFixed(1);
+        const grade = this.getPerformanceGrade(stats.wins / stats.runs);
+        console.log(`  ${condition}: ${stats.wins}勝/${stats.runs}走 (${winRate}%) ${grade}`);
+        continue;
+      }
+
+      console.log(`  ${condition}: 実績なし`);
     }
   }
 
@@ -113,7 +150,9 @@ export class AnalyzeTrack {
     let maxWinRate = 0;
     let maxRuns = 0;
 
-    for (const [condition, stats] of Object.entries(trackStats)) {
+    const conditions = Object.keys(trackStats);
+    for (const condition of conditions) {
+      const stats = trackStats[condition];
       const runs = stats?.runs || 0;
       const wins = stats?.wins || 0;
       const winRate = runs > 0 ? wins / runs : 0;
@@ -164,11 +203,20 @@ export class AnalyzeTrack {
         continue;
       }
 
-      horsesWithStats.forEach((horse, index) => {
+      for (let index = 0; index < horsesWithStats.length; index++) {
+        const horse = horsesWithStats[index];
         const winRate = (horse.win_rate * 100).toFixed(1);
-        const rank = index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉';
-        console.log(`  ${rank} ${horse.name}: ${horse.wins}勝/${horse.runs}走 (${winRate}%)`);
-      });
+        console.log(`  ${this.topThreeMedal(index)} ${horse.name}: ${horse.wins}勝/${horse.runs}走 (${winRate}%)`);
+      }
     }
+  }
+
+  /**
+   * 上位3頭の順位に対応するメダル表記を返す
+   */
+  private topThreeMedal(index: number): string {
+    if (index === 0) return '🥇';
+    if (index === 1) return '🥈';
+    return '🥉';
   }
 }

@@ -8,9 +8,57 @@
 
 import type { Database } from 'bun:sqlite';
 import type { ScoreUpdateData } from '../../types/RepositoryTypes';
+import { getDistanceCategory } from '../../constants/DistanceConstants';
+
+/** 統計更新の対象となるコース条件（会場・芝ダ・距離カテゴリ・馬場状態） */
+export interface RaceCourseContext {
+  venueId: number;
+  raceType: string;
+  distanceCategory: string;
+  trackCondition: string;
+}
 
 export class ScoreAggregateRepository {
   constructor(private readonly db: Database) {}
+
+  /**
+   * 保存済みの有効着順から馬場別・コース別成績を全件再構築する。
+   * 結果訂正や旧データの集計漏れにも対応し、繰り返し実行しても二重計上しない。
+   * 結果のない手入力集計も置き換える。2表の置き換えは同一トランザクションで行う。
+   */
+  rebuildHorseStats(): number {
+    return this.db.transaction(() => {
+      const results = this.db.prepare(`
+        SELECT re.horse_id, r.venue_id, r.race_type, r.distance,
+               r.track_condition, rr.finish_position
+        FROM race_results rr
+        JOIN race_entries re ON re.id = rr.entry_id
+        JOIN races r ON r.id = re.race_id
+        WHERE rr.finish_position > 0
+      `).all() as {
+        horse_id: number;
+        venue_id: number;
+        race_type: string | null;
+        distance: number;
+        track_condition: string | null;
+        finish_position: number;
+      }[];
+
+      this.db.exec('DELETE FROM horse_track_stats');
+      this.db.exec('DELETE FROM horse_course_stats');
+      for (const result of results) {
+        this.updateHorseTrackStats(
+          result.horse_id, result.race_type ?? 'ダート',
+          result.track_condition ?? '良', result.finish_position
+        );
+        this.updateHorseCourseStats(
+          result.horse_id, result.venue_id, result.race_type ?? 'ダート',
+          getDistanceCategory(result.distance), result.finish_position
+        );
+      }
+      return results.length;
+    })();
+  }
 
   /**
    * 馬スコアを更新（10要素構成 + total_score）
@@ -65,12 +113,11 @@ export class ScoreAggregateRepository {
   updateStatsAfterRace(
     horseId: number,
     sireId: number | null,
-    venueId: number,
-    raceType: string,
-    distanceCategory: string,
-    trackCondition: string,
+    course: RaceCourseContext,
     finishPosition: number
   ): void {
+    const { venueId, raceType, distanceCategory, trackCondition } = course;
+
     this.db.transaction(() => {
       // 馬場別成績を更新
       this.updateHorseTrackStats(horseId, raceType, trackCondition, finishPosition);
