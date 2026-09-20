@@ -39,6 +39,16 @@ description: "有馬記念分析システム（Bun + TypeScript CLI）のコー�
 | `suspicious/noFocusedTests` / `suspicious/noSkippedTests` | `.only` / `.skip` をテストに残さない |
 | `security/noGlobalEval` / `nursery/noImpliedEval` | `eval()` / `new Function` / 文字列を渡す `setTimeout` を導入しない |
 | `nursery/noExcessiveNestedCallbacks` | コールバックのネストは 3 段まで（`__test__` / `src/test/` は除外） |
+| `style/noRestrictedImports`（`kysely`） | Kysely は repositories / database 層だけで使う（domain / commands / models / features / utils / constants / types からは禁止） |
+| `style/noRestrictedImports`（`src/database/QueryRunner`） | `QueryRunner`（`queryBuilder` と実行ヘルパー）は repositories / database 層とテストだけで import する |
+| plugin `no-kysely-builder-execution` | Kysely ビルダーの `.execute()` / `.executeTakeFirst()` / `.executeTakeFirstOrThrow()` / `.stream()` を呼ばない（DummyDriver のため空の結果が返る。実行は `src/database/QueryRunner.ts` のヘルパー経由） |
+| plugin `no-kysely-raw-sql` | `sql.raw(` / `sql.lit(` を使わない（`sql` タグ付きテンプレートの `${value}` はバインドされるので可） |
+| plugin `no-sql-template-interpolation` | `db.prepare` / `db.exec` / `db.query` に補間つきテンプレートを渡さない（`?` の並びを組み立てる `placeholders` 変数は除く） |
+| plugin `no-ambient-time`（`src/domain/**`） | domain 層で引数なしの `new Date()` / `Date.now()` を使わない |
+| plugin `no-reduce-entries` | `reduce` / `.entries()` を使わない |
+| plugin `no-js-import-extension` | 相対 import に `.js` 拡張子を付けない |
+| plugin `no-direct-statement-preparation` | `db.prepare` / `db.exec` / `db.query` を直接呼ばない（`src/database/**`・テスト・テストヘルパは対象外。クエリは Kysely で組み立て実行ヘルパーに渡す） |
+
 
 **lint が見ないもの**（引き続き人手で見る）: ブロックのネスト深さ、命名規約（Biome の `useNamingConvention` は本リポジトリの日本語混在・DB カラム名由来の識別子で誤検出が大量に出るため不採用）、import の並び順（assist の `organizeImports` は書き換えを伴うため無効）。
 

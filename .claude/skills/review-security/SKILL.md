@@ -1,6 +1,6 @@
 ---
 name: review-security
-description: "外部データ取得と取り込み経路のセキュリティレビュー。JRA 以外のホストへ取りに行かせない URL 検証（SSRF）、スクレイピングの作法（User-Agent・リクエスト間隔・タイムアウト）、外部由来 HTML/JSON を無検証で DB に入れない、SQL のプレースホルダ徹底、CLI 由来のファイルパスの扱い、生成物（*.db / data/extracted-*.json / data/jra-page.html）と .env をコミットさせないことを検証。Use when user says 'セキュリティレビュー', 'review security', 'セキュリティチェック', 'SSRF確認', or 'SQLインジェクション確認'."
+description: "外部データ取得と取り込み経路のセキュリティレビュー。JRA 以外のホストへ取りに行かせない URL 検証（SSRF）、スクレイピングの作法（User-Agent・リクエスト間隔・タイムアウト）、外部由来 HTML/JSON を無検証で DB に入れない、クエリを Kysely で組み立て生の SQL 文字列を増やさないこと、CLI 由来のファイルパスの扱い、生成物（*.db / data/extracted-*.json / data/jra-page.html）と .env をコミットさせないことを検証。Use when user says 'セキュリティレビュー', 'review security', 'セキュリティチェック', 'SSRF確認', or 'SQLインジェクション確認'."
 ---
 
 ## Instructions
@@ -62,12 +62,20 @@ description: "外部データ取得と取り込み経路のセキュリティレ
 
 #### 4.4 SQL の組み立て
 
-- [ ] 値が必ず `?` プレースホルダでバインドされ、テンプレート文字列に埋め込まれていないか（`LIMIT` / `OFFSET` のような数値も含む）。plugin `no-sql-template-interpolation`（warn）が `db.prepare` / `db.exec` / `db.query` への補間つきテンプレートを機械検出するので、**該当 warning が本変更で純増していないか**を見る（補間式が `placeholders` 識別子だけの形は `?` の並びの組み立てなので検出対象外）
-- [ ] テーブル名・カラム名・SQL 断片を変数で差し込む書き方を新規に増やしていないか（本番・テストとも）。上記 warning の内訳がこの形になっていないか確認する
+新規・変更クエリは **Kysely で組み立てる**（`src/database/QueryRunner.ts` の `queryBuilder`）。
+値はビルダーがバインドパラメータにするため、SQL 本文に値が混ざらない。
+
+- [ ] 新規・変更のクエリが Kysely で組み立てられているか。生の SQL 文字列を新たに増やしていないか（未移行のリポジトリの踏襲は既存債務として WARN 以下）
+- [ ] テーブル名・カラム名・SQL 断片を変数で差し込む書き方を新規に増やしていないか（本番・テストとも）
 - [ ] `db.exec(...)` に渡す SQL が静的文字列か（外部由来の値が混ざっていないか）
+- [ ] 識別子をバインドできない場面（PRAGMA・DDL）で、差し込む値がそのファイルの定数に限られているか。バインドできる代替（`pragma_table_xinfo(?)` のようなテーブル値関数）が無いか検討したか
 
 **NG例**: テーブル名や値を SQL 本文に補間する（`SELECT ... FROM ${table}` / `LIMIT ${limit}`）
-**OK例**: `HorseQueryRepository.getHorsesWithDetailsBatch` — `const placeholders = horseIds.map(() => '?').join(',')` で `?` の並びだけを組み立て、値は `.all(...horseIds)` でバインドする
+**OK例**: `JockeyQueryRepository` — as-of の日付を `.where('races.race_date', '<', beforeDate)` で渡し、値は Kysely がバインドする
+
+※ `sql.raw(` / `sql.lit(`・`db.prepare` 等への補間つきテンプレート・Kysely ビルダーの `.execute()` 系は
+lint（error）が機械検出するため本項では見ない（一覧は review-code 2.1）。直接の `prepare` / `exec` / `query`
+は移行途中のため warn。lint の通過確認は review-code 2.1。
 
 #### 4.5 ファイルパスの扱い
 
@@ -113,7 +121,7 @@ description: "外部データ取得と取り込み経路のセキュリティレ
 ### 本スキルの責務境界
 
 - 層配置・依存方向は **review-arch**、エラーハンドリングの書き方やコード品質は **review-code**、スコア計算の正しさは **review-scoring**、検証の回帰テストの有無は **review-test**、再実行時の一貫性は **review-recovery**
-- `eval` / `new Function` / 文字列 `setTimeout` の非導入は lint（`security/noGlobalEval`・`nursery/noImpliedEval` = error）が担保するため本スキルでは見ない。lint の通過確認は review-code 2.1
+- `eval` / `new Function` / 文字列 `setTimeout` の非導入、`sql.raw` / `sql.lit` の不使用、SQL への補間つきテンプレートの不使用は lint（error）が担保するため本スキルでは見ない。lint の通過確認は review-code 2.1
 - チェック表の行は SKILL.md のチェックリスト項目のみで構成する。**チェックリストに無い独自の行を表に追加しない**（チェック項目外の気づきは「他観点への申し送り」へ。自観点に関連するが項目化されていない所見は「詳細所見」に書き、Summary には数えない）
 - 表には**全チェックリスト項目（4.1〜4.7）を採番項目単位で列挙する**（チェックボックスごとに a/b/c へ分割しない）。該当変更が無い項目も N-A 行として残し省略しない（レビュー網羅性の担保）。Summary には OK/WARN/FAIL の行のみ計上し N-A は除外する
 - 同一の行・欠陥でも、**自観点のチェックリスト項目に明示的に該当する側面**だけを自分の表・Summary に計上する（多面評価は可）。チェックリストの項目名から読めない拡大解釈（docs や一般原則からの引き込み）で FAIL を増やさない

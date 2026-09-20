@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { createTestDb, type TestDatabase } from '../../../test/helpers/testDb';
 import { ScoreAggregateRepository } from '../ScoreAggregateRepository';
+import type { ScoreUpdateData } from '../../../types/RepositoryTypes';
 
 describe('ScoreAggregateRepository.rebuildHorseStats', () => {
   let testDb: TestDatabase;
@@ -61,5 +62,228 @@ describe('ScoreAggregateRepository.rebuildHorseStats', () => {
     expect(repository.rebuildHorseStats()).toBe(0);
     expect(testDb.db.query('SELECT * FROM horse_track_stats').all()).toEqual([]);
     expect(testDb.db.query('SELECT * FROM horse_course_stats').all()).toEqual([]);
+  });
+});
+
+describe('ScoreAggregateRepository の集計更新', () => {
+  let testDb: TestDatabase;
+  let repository: ScoreAggregateRepository;
+
+  beforeEach(() => {
+    testDb = createTestDb('score-aggregate');
+    repository = new ScoreAggregateRepository(testDb.db);
+  });
+
+  afterEach(() => {
+    testDb.cleanup();
+  });
+
+  /** 馬を1頭作って id を返す */
+  function createHorse(name: string): number {
+    return testDb.horseRepo.insertHorseWithBloodline({ name, sire: `${name}父`, mare: `${name}母` }).id;
+  }
+
+  /** 会場 id を取る（レース登録の副作用で作られる） */
+  function createVenueId(): number {
+    const race = testDb.raceRepo.insertRace({
+      raceDate: '2025-11-01',
+      venue: '東京',
+      raceName: '会場作成用',
+      raceNumber: 1,
+      raceType: '芝',
+      distance: 2000,
+      trackCondition: '良'
+    });
+    return (testDb.db.prepare('SELECT venue_id FROM races WHERE id = ?').get(race.id) as { venue_id: number })
+      .venue_id;
+  }
+
+  it('馬場別成績を初回は 1 走で作り、2回目以降は加算する', () => {
+    const horseId = createHorse('馬場集計馬');
+
+    repository.updateHorseTrackStats(horseId, '芝', '良', 1);
+    expect(testDb.db.query('SELECT race_type, track_condition, runs, wins, places, shows FROM horse_track_stats').all())
+      .toEqual([{ race_type: '芝', track_condition: '良', runs: 1, wins: 1, places: 0, shows: 0 }]);
+
+    repository.updateHorseTrackStats(horseId, '芝', '良', 2);
+    repository.updateHorseTrackStats(horseId, '芝', '良', 3);
+    repository.updateHorseTrackStats(horseId, '芝', '良', 5);
+    expect(testDb.db.query('SELECT runs, wins, places, shows FROM horse_track_stats').all())
+      .toEqual([{ runs: 4, wins: 1, places: 1, shows: 1 }]);
+
+    // 条件が違えば別行
+    repository.updateHorseTrackStats(horseId, 'ダート', '良', 1);
+    expect(testDb.db.query('SELECT COUNT(*) AS c FROM horse_track_stats').get()).toEqual({ c: 2 });
+  });
+
+  it('コース別成績を初回は 1 走で作り、2回目以降は加算する', () => {
+    const horseId = createHorse('コース集計馬');
+    const venueId = createVenueId();
+
+    repository.updateHorseCourseStats(horseId, venueId, '芝', '中距離', 2);
+    expect(
+      testDb.db
+        .query('SELECT venue_id, race_type, distance_category, runs, wins, places, shows FROM horse_course_stats')
+        .all()
+    ).toEqual([
+      { venue_id: venueId, race_type: '芝', distance_category: '中距離', runs: 1, wins: 0, places: 1, shows: 0 }
+    ]);
+
+    repository.updateHorseCourseStats(horseId, venueId, '芝', '中距離', 1);
+    expect(testDb.db.query('SELECT runs, wins, places, shows FROM horse_course_stats').all())
+      .toEqual([{ runs: 2, wins: 1, places: 1, shows: 0 }]);
+  });
+
+  it('血統統計を初回は 1 走で作り、2回目以降は加算する', () => {
+    const horseId = createHorse('血統集計馬');
+    const sireId = (
+      testDb.db.prepare('SELECT sire_id FROM horses WHERE id = ?').get(horseId) as { sire_id: number }
+    ).sire_id;
+
+    repository.updateBloodlineStats(sireId, '芝', '長距離', '重', 3);
+    expect(
+      testDb.db
+        .query('SELECT sire_id, race_type, distance_category, track_condition, runs, wins, places, shows FROM bloodline_stats')
+        .all()
+    ).toEqual([
+      {
+        sire_id: sireId,
+        race_type: '芝',
+        distance_category: '長距離',
+        track_condition: '重',
+        runs: 1,
+        wins: 0,
+        places: 0,
+        shows: 1
+      }
+    ]);
+
+    repository.updateBloodlineStats(sireId, '芝', '長距離', '重', 1);
+    expect(testDb.db.query('SELECT runs, wins, places, shows FROM bloodline_stats').all())
+      .toEqual([{ runs: 2, wins: 1, places: 0, shows: 1 }]);
+  });
+});
+
+describe('ScoreAggregateRepository.updateHorseScore', () => {
+  let testDb: TestDatabase;
+  let repository: ScoreAggregateRepository;
+
+  beforeEach(() => {
+    testDb = createTestDb('score-upsert');
+    repository = new ScoreAggregateRepository(testDb.db);
+  });
+
+  afterEach(() => {
+    testDb.cleanup();
+  });
+
+  /** 10要素 + 総合スコアを一括で作る */
+  function scores(base: number): ScoreUpdateData {
+    return {
+      recent_performance_score: base + 1,
+      course_aptitude_score: base + 2,
+      distance_aptitude_score: base + 3,
+      last_3f_ability_score: base + 4,
+      g1_achievement_score: base + 5,
+      rotation_score: base + 6,
+      track_condition_score: base + 7,
+      jockey_score: base + 8,
+      trainer_score: base + 9,
+      post_position_score: base + 10,
+      total_score: base + 11
+    };
+  }
+
+  function setup() {
+    const horseId = testDb.horseRepo.insertHorseWithBloodline({ name: 'スコア馬' }).id;
+    const race = testDb.raceRepo.insertRace({
+      raceDate: '2025-10-01',
+      venue: '阪神',
+      raceName: 'スコアレース',
+      raceNumber: 1,
+      raceType: '芝',
+      distance: 1800,
+      trackCondition: '良'
+    });
+    return { horseId, raceId: race.id };
+  }
+
+  it('馬とレースの組で1行に収まり、2回目は上書きする', () => {
+    const { horseId, raceId } = setup();
+
+    repository.updateHorseScore(horseId, raceId, scores(0));
+    expect(
+      testDb.db
+        .query('SELECT horse_id, race_id, recent_performance_score, jockey_score, total_score FROM horse_scores')
+        .all()
+    ).toEqual([
+      { horse_id: horseId, race_id: raceId, recent_performance_score: 1, jockey_score: 8, total_score: 11 }
+    ]);
+
+    repository.updateHorseScore(horseId, raceId, scores(100));
+    expect(
+      testDb.db
+        .query('SELECT horse_id, race_id, recent_performance_score, jockey_score, total_score FROM horse_scores')
+        .all()
+    ).toEqual([
+      { horse_id: horseId, race_id: raceId, recent_performance_score: 101, jockey_score: 108, total_score: 111 }
+    ]);
+  });
+
+  it('更新で null を渡した要素は既存値を残す（COALESCE）', () => {
+    const { horseId, raceId } = setup();
+    repository.updateHorseScore(horseId, raceId, scores(0));
+
+    const partial = { ...scores(100), jockey_score: null, total_score: null } as unknown as ScoreUpdateData;
+    repository.updateHorseScore(horseId, raceId, partial);
+
+    expect(
+      testDb.db
+        .query('SELECT recent_performance_score, jockey_score, total_score FROM horse_scores')
+        .all()
+    ).toEqual([{ recent_performance_score: 101, jockey_score: 8, total_score: 11 }]);
+  });
+
+  it('更新で undefined を渡した要素は既存値を残す（旧実装と同じ挙動）', () => {
+    const { horseId, raceId } = setup();
+    repository.updateHorseScore(horseId, raceId, scores(0));
+
+    // 旧実装（bun:sqlite の直バインド）では undefined が NULL として渡り、
+    // COALESCE(NULL, 列) で既存値が保たれていた。同じ結果になることを固定する
+    const partial = { ...scores(100), jockey_score: undefined, total_score: undefined } as unknown as ScoreUpdateData;
+    expect(() => repository.updateHorseScore(horseId, raceId, partial)).not.toThrow();
+
+    expect(
+      testDb.db
+        .query('SELECT recent_performance_score, jockey_score, total_score FROM horse_scores')
+        .all()
+    ).toEqual([{ recent_performance_score: 101, jockey_score: 8, total_score: 11 }]);
+  });
+
+  it('新規登録で undefined を渡した要素は DEFAULT ではなく NULL になる（旧実装と同じ挙動）', () => {
+    const { horseId, raceId } = setup();
+
+    // 旧実装は全列を明示バインドしていたため、undefined の列には DEFAULT 0 ではなく NULL が入る
+    const partial = { ...scores(0), jockey_score: undefined, total_score: undefined } as unknown as ScoreUpdateData;
+    repository.updateHorseScore(horseId, raceId, partial);
+
+    expect(
+      testDb.db
+        .query('SELECT recent_performance_score, jockey_score, total_score FROM horse_scores')
+        .all()
+    ).toEqual([{ recent_performance_score: 1, jockey_score: null, total_score: null }]);
+  });
+
+  it('race_id が NULL の行は UNIQUE の対象外なので毎回追加される', () => {
+    const { horseId } = setup();
+
+    repository.updateHorseScore(horseId, null, scores(0));
+    repository.updateHorseScore(horseId, null, scores(100));
+
+    expect(testDb.db.query('SELECT race_id, total_score FROM horse_scores ORDER BY id').all())
+      .toEqual([
+        { race_id: null, total_score: 11 },
+        { race_id: null, total_score: 111 }
+      ]);
   });
 });

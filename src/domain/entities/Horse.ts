@@ -427,36 +427,36 @@ export class Horse {
   /**
    * 父名を取得
    *
-   * @returns 父名、不明の場合は undefined
+   * @returns 父名、不明の場合は null / undefined
    */
-  getSireName(): string | undefined {
+  getSireName(): string | null | undefined {
     return this.data.detail?.sire_name;
   }
 
   /**
    * 母名を取得
    *
-   * @returns 母名、不明の場合は undefined
+   * @returns 母名、不明の場合は null / undefined
    */
-  getMareName(): string | undefined {
+  getMareName(): string | null | undefined {
     return this.data.detail?.mare_name;
   }
 
   /**
    * 母父名を取得
    *
-   * @returns 母父名、不明の場合は undefined
+   * @returns 母父名、不明の場合は null / undefined
    */
-  getMaresSireName(): string | undefined {
+  getMaresSireName(): string | null | undefined {
     return this.data.detail?.mares_sire_name;
   }
 
   /**
    * 調教師名を取得
    *
-   * @returns 調教師名、不明の場合は undefined
+   * @returns 調教師名、不明の場合は null / undefined
    */
-  getTrainerName(): string | undefined {
+  getTrainerName(): string | null | undefined {
     return this.data.detail?.trainer_name;
   }
 

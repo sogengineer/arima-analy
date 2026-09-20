@@ -5,3 +5,4 @@
 export { HorseAggregateRepository } from './HorseAggregateRepository';
 export { RaceAggregateRepository } from './RaceAggregateRepository';
 export { ScoreAggregateRepository } from './ScoreAggregateRepository';
+export { EntryOddsAggregateRepository } from './EntryOddsAggregateRepository';

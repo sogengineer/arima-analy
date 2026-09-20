@@ -19,7 +19,7 @@ export class RaceResult {
     return this.data.race_date;
   }
 
-  get raceClass(): string | undefined {
+  get raceClass(): string | null | undefined {
     return this.data.race_class;
   }
 
@@ -27,11 +27,11 @@ export class RaceResult {
     return this.data.distance;
   }
 
-  get raceType(): string | undefined {
+  get raceType(): string | null | undefined {
     return this.data.race_type;
   }
 
-  get trackCondition(): string | undefined {
+  get trackCondition(): string | null | undefined {
     return this.data.track_condition;
   }
 
@@ -39,27 +39,27 @@ export class RaceResult {
     return this.data.venue_name;
   }
 
-  get jockeyId(): number | undefined {
+  get jockeyId(): number | null | undefined {
     return this.data.jockey_id;
   }
 
-  get popularity(): number | undefined {
+  get popularity(): number | null | undefined {
     return this.data.popularity;
   }
 
-  get finishPosition(): number | undefined {
+  get finishPosition(): number | null | undefined {
     return this.data.finish_position;
   }
 
-  get finishTime(): string | undefined {
+  get finishTime(): string | null | undefined {
     return this.data.finish_time;
   }
 
-  get last3FTime(): number | undefined {
+  get last3FTime(): number | null | undefined {
     return this.data.last_3f_time;
   }
 
-  get timeDiffSeconds(): number | undefined {
+  get timeDiffSeconds(): number | null | undefined {
     return this.data.time_diff_seconds;
   }
 

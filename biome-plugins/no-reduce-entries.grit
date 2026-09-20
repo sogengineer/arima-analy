@@ -6,14 +6,14 @@ or {
     register_diagnostic(
       span = $d,
       message = "reduce は使わない。for...of + 明示的な蓄積、または map/filter に置き換えること。",
-      severity = "warn"
+      severity = "error"
     )
   },
   `$x.entries($...)` as $d where {
     register_diagnostic(
       span = $d,
       message = "Object.entries / .entries() は使わない。明示的な型を持つ配列やレコードで扱うこと。",
-      severity = "warn"
+      severity = "error"
     )
   }
 }

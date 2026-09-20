@@ -1,0 +1,15 @@
+language js
+
+// 最終形は「SQL の組み立ては Kysely、実行は src/database/QueryRunner.ts のヘルパー」。
+// `db.prepare(...)` / `db.exec(...)` / `db.query(...)` を直接書くのは、
+// src/database（マイグレーション・接続初期化・実行ヘルパー）とテスト・テストヘルパだけにする。
+//
+// 適用範囲は biome.json の overrides 側で絞る（メソッド名の照合は完全一致）。
+`$db.$method($...)` as $d where {
+  $method <: or { `prepare`, `exec`, `query` },
+  register_diagnostic(
+    span = $d,
+    message = "SQL は Kysely で組み立て、実行は src/database/QueryRunner.ts のヘルパー（selectRows / selectRow / runStatement）経由にする。直接の prepare / exec / query は src/database とテストのみ。",
+    severity = "error"
+  )
+}

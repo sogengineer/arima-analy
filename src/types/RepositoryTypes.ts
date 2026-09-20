@@ -2,38 +2,34 @@
  * リポジトリ層で使用する型定義
  */
 
-import type {
-  HorseDetail,
-  RaceResultDetail,
-  DBRace,
-  DBRaceEntry,
-  DBHorse,
-  HorseImportData,
-  RaceImportData,
-  EntryImportData,
-  ResultImportData
-} from './HorseData';
+import type { HorseDetail } from './HorseData';
 
 // ============================================
 // Query リポジトリ用の戻り値型
 // ============================================
 
-/** 馬のレース結果（Query用、拡張版） */
+/**
+ * 馬のレース結果（Query用、拡張版）
+ *
+ * @remarks
+ * DB で NULL を許す列は `null` も取りうる（未確定の着順、未設定のクラスなど）。
+ * 「値が無い」を `undefined` と `null` のどちらで受けるかは取得経路によるため、両方を許す。
+ */
 export interface HorseRaceResult {
   race_id: number;
   race_name: string;
   race_date: string;
-  race_class?: string;
+  race_class?: string | null;
   distance: number;
-  race_type?: string;
-  track_condition?: string;
+  race_type?: string | null;
+  track_condition?: string | null;
   venue_name: string;
-  jockey_id?: number;
-  popularity?: number;
-  finish_position?: number;
-  finish_time?: string;
-  last_3f_time?: number;
-  time_diff_seconds?: number;
+  jockey_id?: number | null;
+  popularity?: number | null;
+  finish_position?: number | null;
+  finish_time?: string | null;
+  last_3f_time?: number | null;
+  time_diff_seconds?: number | null;
 }
 
 /** コース別成績統計 */
@@ -41,40 +37,25 @@ export interface CourseStats {
   horse_id: number;
   venue_id: number;
   venue_name: string;
-  race_type: string;
-  distance_category?: string;
+  race_type: string | null;
+  distance_category?: string | null;
   runs: number;
   wins: number;
   places: number;
   shows: number;
-  win_rate?: number;
-  place_rate?: number;
+  win_rate?: number | null;
+  place_rate?: number | null;
 }
 
 /** 馬場別成績統計 */
 export interface TrackStats {
   horse_id: number;
-  race_type: string;
-  track_condition: string;
+  race_type: string | null;
+  track_condition: string | null;
   runs: number;
   wins: number;
   places: number;
   shows: number;
-}
-
-/** レース情報（会場名付き） */
-export interface RaceWithVenue extends DBRace {
-  venue_name: string;
-}
-
-/** 出走エントリ（馬・騎手情報付き） */
-export interface EntryWithDetails extends DBRaceEntry {
-  horse_name: string;
-  sire_name?: string;
-  mare_name?: string;
-  trainer_id?: number;
-  trainer_name?: string;
-  jockey_name?: string;
 }
 
 /** 騎手のコース別成績 */
@@ -108,37 +89,6 @@ export interface JockeyTrainerComboStats {
   wins: number;
   places: number;
   shows: number;
-}
-
-/** 血統統計 */
-export interface BloodlineStats {
-  sire_id: number;
-  sire_name?: string;
-  race_type: string;
-  distance_category?: string;
-  track_condition?: string;
-  runs: number;
-  wins: number;
-  places: number;
-  shows: number;
-  win_rate?: number;
-}
-
-/** 馬スコアレコード */
-export interface HorseScoreRecord {
-  horse_id: number;
-  race_id?: number;
-  recent_performance_score: number;
-  course_aptitude_score: number;
-  distance_aptitude_score: number;
-  last_3f_ability_score: number;
-  g1_achievement_score: number;
-  rotation_score: number;
-  track_condition_score: number;
-  jockey_score: number;
-  trainer_score: number;
-  post_position_score: number;
-  total_score?: number;
 }
 
 // ============================================
@@ -276,14 +226,4 @@ export function isShow(position: number | null | undefined): boolean {
 }
 
 // エクスポート（既存の型を再エクスポート）
-export type {
-  HorseDetail,
-  RaceResultDetail,
-  DBRace,
-  DBRaceEntry,
-  DBHorse,
-  HorseImportData,
-  RaceImportData,
-  EntryImportData,
-  ResultImportData
-};
+export type { HorseDetail };

@@ -4,6 +4,8 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { sql } from 'kysely';
+import { queryBuilder, runStatement, selectRow } from '../../database/QueryRunner';
 import type { HorseImportData } from '../../types/HorseData';
 import type { HorseInsertResult } from '../../types/RepositoryTypes';
 
@@ -15,6 +17,15 @@ interface RelatedIds {
   ownerId: number | null;
   breederId: number | null;
 }
+
+/**
+ * 突合で NULL を同じ値として扱うための番兵
+ *
+ * @remarks
+ * 元の SQL の `COALESCE(sire_id, -1) = COALESCE(?, -1)` を保つ。右辺はバインド値だけなので
+ * SQL の COALESCE と同じ値を JS 側で作って渡す（結果は変わらない）。
+ */
+const NULL_SENTINEL = -1;
 
 /** null のIDを undefined に落として登録結果に詰め替える */
 function buildInsertResult(id: number, updated: boolean, related: RelatedIds): HorseInsertResult {
@@ -66,52 +77,54 @@ export class HorseAggregateRepository {
     };
   }
 
-  /** 既存の馬レコードを、渡された値がある項目だけ上書きする */
+  /**
+   * 既存の馬レコードを、渡された値がある項目だけ上書きする
+   *
+   * @remarks
+   * 各列は `COALESCE(渡された値, 既存値)`。渡されなかった項目（null）で既存値を潰さない。
+   */
   private updateHorseRow(horseId: number, data: HorseImportData, related: RelatedIds): void {
-    this.db.prepare(`
-      UPDATE horses SET
-        name = COALESCE(?, name),
-        jra_horse_id = COALESCE(?, jra_horse_id),
-        birth_year = COALESCE(?, birth_year),
-        sex = COALESCE(?, sex),
-        sire_id = COALESCE(?, sire_id),
-        mare_id = COALESCE(?, mare_id),
-        trainer_id = COALESCE(?, trainer_id),
-        owner_id = COALESCE(?, owner_id),
-        breeder_id = COALESCE(?, breeder_id),
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(
-      data.name || null,
-      data.jraHorseId ?? null,
-      data.birthYear ?? null,
-      data.sex ?? null,
-      related.sireId,
-      related.mareId,
-      related.trainerId,
-      related.ownerId,
-      related.breederId,
-      horseId
+    runStatement(
+      this.db,
+      queryBuilder
+        .updateTable('horses')
+        .set(eb => ({
+          name: eb.fn.coalesce(eb.val(data.name || null), eb.ref('name')),
+          jra_horse_id: eb.fn.coalesce(eb.val(data.jraHorseId ?? null), eb.ref('jra_horse_id')),
+          birth_year: eb.fn.coalesce(eb.val(data.birthYear ?? null), eb.ref('birth_year')),
+          sex: eb.fn.coalesce(eb.val(data.sex ?? null), eb.ref('sex')),
+          sire_id: eb.fn.coalesce(eb.val(related.sireId), eb.ref('sire_id')),
+          mare_id: eb.fn.coalesce(eb.val(related.mareId), eb.ref('mare_id')),
+          trainer_id: eb.fn.coalesce(eb.val(related.trainerId), eb.ref('trainer_id')),
+          owner_id: eb.fn.coalesce(eb.val(related.ownerId), eb.ref('owner_id')),
+          breeder_id: eb.fn.coalesce(eb.val(related.breederId), eb.ref('breeder_id')),
+          updated_at: sql<string>`CURRENT_TIMESTAMP`
+        }))
+        .where('id', '=', horseId)
+        .compile()
     );
   }
 
   /** 馬を新規登録し、採番されたIDを返す */
   private insertHorseRow(data: HorseImportData, related: RelatedIds): number {
-    const result = this.db.prepare(`
-      INSERT INTO horses (name, jra_horse_id, birth_year, sex, sire_id, mare_id, trainer_id, owner_id, breeder_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      data.name,
-      data.jraHorseId ?? null,
-      data.birthYear ?? null,
-      data.sex ?? null,
-      related.sireId,
-      related.mareId,
-      related.trainerId,
-      related.ownerId,
-      related.breederId
+    const result = runStatement(
+      this.db,
+      queryBuilder
+        .insertInto('horses')
+        .values({
+          name: data.name,
+          jra_horse_id: data.jraHorseId ?? null,
+          birth_year: data.birthYear ?? null,
+          sex: data.sex ?? null,
+          sire_id: related.sireId,
+          mare_id: related.mareId,
+          trainer_id: related.trainerId,
+          owner_id: related.ownerId,
+          breeder_id: related.breederId
+        })
+        .compile()
     );
-    return result.lastInsertRowid as number;
+    return Number(result.lastInsertRowid);
   }
 
   /**
@@ -142,47 +155,54 @@ export class HorseAggregateRepository {
     jraHorseId: string | undefined,
     sireId: number | null,
     mareId: number | null
-  ): { id: number } | undefined {
+  ): { id: number } | null {
     if (jraHorseId) {
-      const byJraId = this.db
-        .prepare('SELECT id FROM horses WHERE jra_horse_id = ?')
-        .get(jraHorseId) as { id: number } | undefined;
+      const byJraId = selectRow(
+        this.db,
+        queryBuilder.selectFrom('horses').select('id').where('jra_horse_id', '=', jraHorseId).compile()
+      );
       if (byJraId) return byJraId;
     }
 
-    // COALESCEでNULLを-1に変換して確実にマッチング。
+    // NULL を番兵に寄せて確実にマッチングする。
     // ただし jra_horse_id を持ち込んでいるときは、**別の** jra_horse_id を持つ行は
     // 別馬なのでマッチさせない（UPDATE すると他馬の血統登録番号を上書きしてしまう）
-    const byBloodline = this.db.prepare(`
-      SELECT id FROM horses
-      WHERE name = ?
-        AND COALESCE(sire_id, -1) = COALESCE(?, -1)
-        AND COALESCE(mare_id, -1) = COALESCE(?, -1)
-        AND (? IS NULL OR jra_horse_id IS NULL OR jra_horse_id = ?)
-      ORDER BY id
-      LIMIT 1
-    `).get(
-      name,
-      sireId,
-      mareId,
-      jraHorseId ?? null,
-      jraHorseId ?? null
-    ) as { id: number } | undefined;
+    let byBloodlineQuery = queryBuilder
+      .selectFrom('horses')
+      .select('id')
+      .where('name', '=', name)
+      .where(eb => eb(eb.fn.coalesce('sire_id', eb.val(NULL_SENTINEL)), '=', sireId ?? NULL_SENTINEL))
+      .where(eb => eb(eb.fn.coalesce('mare_id', eb.val(NULL_SENTINEL)), '=', mareId ?? NULL_SENTINEL))
+      .orderBy('id')
+      .limit(1);
+
+    if (jraHorseId !== undefined) {
+      byBloodlineQuery = byBloodlineQuery.where(eb =>
+        eb.or([eb('jra_horse_id', 'is', null), eb('jra_horse_id', '=', jraHorseId)])
+      );
+    }
+
+    const byBloodline = selectRow(this.db, byBloodlineQuery.compile());
     if (byBloodline) return byBloodline;
 
     // 血統が渡されないケース（結果ページ由来）のフォールバック。
     // jra_horse_id が未設定の行だけを対象にすることで、別馬への誤マージと
     // UNIQUE 違反の両方を避ける
     if (sireId == null && mareId == null) {
-      return this.db.prepare(`
-        SELECT id FROM horses
-        WHERE name = ? AND jra_horse_id IS NULL
-        ORDER BY id
-        LIMIT 1
-      `).get(name) as { id: number } | undefined;
+      return selectRow(
+        this.db,
+        queryBuilder
+          .selectFrom('horses')
+          .select('id')
+          .where('name', '=', name)
+          .where('jra_horse_id', 'is', null)
+          .orderBy('id')
+          .limit(1)
+          .compile()
+      );
     }
 
-    return undefined;
+    return null;
   }
 
   // ============================================
@@ -191,67 +211,77 @@ export class HorseAggregateRepository {
 
   private getOrCreateSire(name: string): number | null {
     if (!name || name.trim() === '') return null;
-    const existing = this.db.prepare(
-      'SELECT id FROM sires WHERE name = ?'
-    ).get(name) as { id: number } | undefined;
+    const existing = selectRow(
+      this.db,
+      queryBuilder.selectFrom('sires').select('id').where('name', '=', name).compile()
+    );
     if (existing) return existing.id;
 
-    const result = this.db.prepare(
-      'INSERT INTO sires (name) VALUES (?)'
-    ).run(name);
-    return result.lastInsertRowid as number;
+    const result = runStatement(
+      this.db,
+      queryBuilder.insertInto('sires').values({ name }).compile()
+    );
+    return Number(result.lastInsertRowid);
   }
 
   private getOrCreateMare(name: string, maresSireName?: string): number | null {
     if (!name || name.trim() === '') return null;
-    const existing = this.db.prepare(
-      'SELECT id FROM mares WHERE name = ?'
-    ).get(name) as { id: number } | undefined;
+    const existing = selectRow(
+      this.db,
+      queryBuilder.selectFrom('mares').select('id').where('name', '=', name).compile()
+    );
     if (existing) return existing.id;
 
     const maresSireId = maresSireName ? this.getOrCreateSire(maresSireName) : null;
-    const result = this.db.prepare(
-      'INSERT INTO mares (name, sire_id) VALUES (?, ?)'
-    ).run(name, maresSireId);
-    return result.lastInsertRowid as number;
+    const result = runStatement(
+      this.db,
+      queryBuilder.insertInto('mares').values({ name, sire_id: maresSireId }).compile()
+    );
+    return Number(result.lastInsertRowid);
   }
 
   private getOrCreateTrainer(name: string, stable?: '美浦' | '栗東'): number | null {
     if (!name) return null;
-    const existing = this.db.prepare(
-      'SELECT id FROM trainers WHERE name = ?'
-    ).get(name) as { id: number } | undefined;
+    const existing = selectRow(
+      this.db,
+      queryBuilder.selectFrom('trainers').select('id').where('name', '=', name).compile()
+    );
     if (existing) return existing.id;
 
-    const result = this.db.prepare(
-      'INSERT INTO trainers (name, stable) VALUES (?, ?)'
-    ).run(name, stable ?? null);
-    return result.lastInsertRowid as number;
+    const result = runStatement(
+      this.db,
+      queryBuilder.insertInto('trainers').values({ name, stable: stable ?? null }).compile()
+    );
+    return Number(result.lastInsertRowid);
   }
 
   private getOrCreateOwner(name: string): number | null {
     if (!name) return null;
-    const existing = this.db.prepare(
-      'SELECT id FROM owners WHERE name = ?'
-    ).get(name) as { id: number } | undefined;
+    const existing = selectRow(
+      this.db,
+      queryBuilder.selectFrom('owners').select('id').where('name', '=', name).compile()
+    );
     if (existing) return existing.id;
 
-    const result = this.db.prepare(
-      'INSERT INTO owners (name) VALUES (?)'
-    ).run(name);
-    return result.lastInsertRowid as number;
+    const result = runStatement(
+      this.db,
+      queryBuilder.insertInto('owners').values({ name }).compile()
+    );
+    return Number(result.lastInsertRowid);
   }
 
   private getOrCreateBreeder(name: string): number | null {
     if (!name) return null;
-    const existing = this.db.prepare(
-      'SELECT id FROM breeders WHERE name = ?'
-    ).get(name) as { id: number } | undefined;
+    const existing = selectRow(
+      this.db,
+      queryBuilder.selectFrom('breeders').select('id').where('name', '=', name).compile()
+    );
     if (existing) return existing.id;
 
-    const result = this.db.prepare(
-      'INSERT INTO breeders (name) VALUES (?)'
-    ).run(name);
-    return result.lastInsertRowid as number;
+    const result = runStatement(
+      this.db,
+      queryBuilder.insertInto('breeders').values({ name }).compile()
+    );
+    return Number(result.lastInsertRowid);
   }
 }

@@ -4,6 +4,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { queryBuilder, runStatement, selectRow } from '../../database/QueryRunner';
 import type {
   RaceImportData,
   EntryImportData,
@@ -56,17 +57,19 @@ export class RaceAggregateRepository {
     data: RaceImportData,
     venueId: number,
     matchByName: boolean
-  ): { id: number } | undefined {
+  ): { id: number } | null {
+    const base = queryBuilder
+      .selectFrom('races')
+      .select('id')
+      .where('race_date', '=', data.raceDate)
+      .where('venue_id', '=', venueId);
+
     if (matchByName) {
       // 前走データ: レース名＋日付＋会場でマッチング
-      return this.db.prepare(`
-        SELECT id FROM races WHERE race_date = ? AND venue_id = ? AND race_name = ?
-      `).get(data.raceDate, venueId, data.raceName) as { id: number } | undefined;
+      return selectRow(this.db, base.where('race_name', '=', data.raceName).compile());
     }
     // 通常: 日付＋会場＋レース番号でマッチング
-    return this.db.prepare(`
-      SELECT id FROM races WHERE race_date = ? AND venue_id = ? AND race_number = ?
-    `).get(data.raceDate, venueId, data.raceNumber ?? 1) as { id: number } | undefined;
+    return selectRow(this.db, base.where('race_number', '=', data.raceNumber ?? 1).compile());
   }
 
   /** 新規レースのレース番号を決める（前走データでレース番号不明なら自動採番） */
@@ -77,11 +80,16 @@ export class RaceAggregateRepository {
   ): number {
     if (matchByName && data.raceNumber == null) {
       // 同じ日・同じ会場の最大race_number + 1 を使用
-      const maxRow = this.db.prepare(`
-        SELECT COALESCE(MAX(race_number), 0) as max_num FROM races
-        WHERE race_date = ? AND venue_id = ?
-      `).get(data.raceDate, venueId) as { max_num: number };
-      return maxRow.max_num + 1;
+      const maxRow = selectRow(
+        this.db,
+        queryBuilder
+          .selectFrom('races')
+          .select(eb => eb.fn.coalesce(eb.fn.max('race_number'), eb.val(0)).as('max_num'))
+          .where('race_date', '=', data.raceDate)
+          .where('venue_id', '=', venueId)
+          .compile()
+      );
+      return (maxRow?.max_num ?? 0) + 1;
     }
     return data.raceNumber ?? 1;
   }
@@ -107,9 +115,15 @@ export class RaceAggregateRepository {
       const jockeyId = this.getOrCreateJockey(data.jockeyName, data.assignedWeight);
 
       // 既存チェック
-      const existing = this.db.prepare(`
-        SELECT id FROM race_entries WHERE race_id = ? AND horse_id = ?
-      `).get(raceId, horse.id) as { id: number } | undefined;
+      const existing = selectRow(
+        this.db,
+        queryBuilder
+          .selectFrom('race_entries')
+          .select('id')
+          .where('race_id', '=', raceId)
+          .where('horse_id', '=', horse.id)
+          .compile()
+      );
 
       if (existing) {
         updateEntryRow(this.db, existing.id, data, jockeyId);
@@ -127,9 +141,10 @@ export class RaceAggregateRepository {
   insertRaceResult(entryId: number, data: ResultImportData): TransactionResult {
     return this.db.transaction(() => {
       // 既存チェック
-      const existing = this.db.prepare(
-        'SELECT id FROM race_results WHERE entry_id = ?'
-      ).get(entryId) as { id: number } | undefined;
+      const existing = selectRow(
+        this.db,
+        queryBuilder.selectFrom('race_results').select('id').where('entry_id', '=', entryId).compile()
+      );
 
       if (existing) {
         updateResultRow(this.db, existing.id, data);
@@ -180,30 +195,34 @@ export class RaceAggregateRepository {
   // ============================================
 
   private getOrCreateVenue(name: string): number {
-    const existing = this.db.prepare(
-      'SELECT id FROM venues WHERE name = ?'
-    ).get(name) as { id: number } | undefined;
+    const existing = selectRow(
+      this.db,
+      queryBuilder.selectFrom('venues').select('id').where('name', '=', name).compile()
+    );
     if (existing) return existing.id;
 
-    const result = this.db.prepare(
-      'INSERT INTO venues (name) VALUES (?)'
-    ).run(name);
-    return result.lastInsertRowid as number;
+    const result = runStatement(this.db, queryBuilder.insertInto('venues').values({ name }).compile());
+    return Number(result.lastInsertRowid);
   }
 
   private getOrCreateJockey(name: string, weight?: number): number {
     // 騎手名が不明な場合は「未定」として登録（外部キー制約対応）
     const jockeyName = name?.trim() || '未定';
 
-    const existing = this.db.prepare(
-      'SELECT id FROM jockeys WHERE name = ?'
-    ).get(jockeyName) as { id: number } | undefined;
+    const existing = selectRow(
+      this.db,
+      queryBuilder.selectFrom('jockeys').select('id').where('name', '=', jockeyName).compile()
+    );
     if (existing) return existing.id;
 
-    const result = this.db.prepare(
-      'INSERT INTO jockeys (name, default_weight) VALUES (?, ?)'
-    ).run(jockeyName, weight ?? null);
-    return result.lastInsertRowid as number;
+    const result = runStatement(
+      this.db,
+      queryBuilder
+        .insertInto('jockeys')
+        .values({ name: jockeyName, default_weight: weight ?? null })
+        .compile()
+    );
+    return Number(result.lastInsertRowid);
   }
 
   private getHorseByNameAndBloodline(
@@ -211,31 +230,37 @@ export class RaceAggregateRepository {
     sireName?: string,
     mareName?: string,
     jraHorseId?: string
-  ): { id: number } | undefined {
+  ): { id: number } | null {
     // 血統登録番号があれば最優先。同名馬を確実に区別できる
     if (jraHorseId) {
-      const byId = this.db.prepare(
-        'SELECT id FROM horses WHERE jra_horse_id = ?'
-      ).get(jraHorseId) as { id: number } | undefined;
+      const byId = selectRow(
+        this.db,
+        queryBuilder.selectFrom('horses').select('id').where('jra_horse_id', '=', jraHorseId).compile()
+      );
       if (byId) return byId;
     }
 
     if (sireName || mareName) {
-      return this.db.prepare(`
-        SELECT h.id FROM horses h
-        LEFT JOIN sires s ON h.sire_id = s.id
-        LEFT JOIN mares m ON h.mare_id = m.id
-        WHERE h.name = ?
-          AND (? IS NULL OR s.name = ?)
-          AND (? IS NULL OR m.name = ?)
-      `).get(
-        name,
-        sireName ?? null, sireName ?? null,
-        mareName ?? null, mareName ?? null
-      ) as { id: number } | undefined;
+      // 片方しか渡されない経路があるため、渡された名前だけを条件にする
+      // （渡されなかった側は突合条件から外す）
+      const sire = sireName ?? null;
+      const mare = mareName ?? null;
+      return selectRow(
+        this.db,
+        queryBuilder
+          .selectFrom('horses')
+          .leftJoin('sires', 'sires.id', 'horses.sire_id')
+          .leftJoin('mares', 'mares.id', 'horses.mare_id')
+          .select('horses.id')
+          .where('horses.name', '=', name)
+          .where(eb => eb.or([eb(eb.val(sire), 'is', null), eb('sires.name', '=', sire)]))
+          .where(eb => eb.or([eb(eb.val(mare), 'is', null), eb('mares.name', '=', mare)]))
+          .compile()
+      );
     }
-    return this.db.prepare(
-      'SELECT id FROM horses WHERE name = ?'
-    ).get(name) as { id: number } | undefined;
+    return selectRow(
+      this.db,
+      queryBuilder.selectFrom('horses').select('id').where('name', '=', name).compile()
+    );
   }
 }

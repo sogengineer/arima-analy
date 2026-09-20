@@ -8,7 +8,7 @@
  * 取得（SQL）は行わない。
  */
 
-import type { EntryWithDetails } from '../types/RepositoryTypes';
+import type { EntryWithDetailsRow } from '../repositories/queries/RaceQueryRepository';
 import type { PreviousRaceRow } from '../repositories/queries/HorseQueryRepository';
 import type { ScoreComponents } from '../domain/valueObjects/ScoreComponents';
 import { MS_PER_DAY } from '../constants/DistanceConstants';
@@ -89,7 +89,7 @@ function marketFeatures(
 
 /** 馬体・斤量 */
 function physicalFeatures(
-  entry: EntryWithDetails,
+  entry: EntryWithDetailsRow,
   index: number,
   context: RaceFeatureContext
 ): Pick<
@@ -110,7 +110,7 @@ function physicalFeatures(
 
 /** 通算成績（そのレースより前に確定した値） */
 function careerFeatures(
-  entry: EntryWithDetails
+  entry: EntryWithDetailsRow
 ): Pick<MLFeatures, 'careerRunsLog' | 'careerWinRate' | 'careerShowRate'> {
   const careerRuns = entry.career_runs ?? 0;
   const careerWins = entry.career_wins ?? 0;
@@ -188,7 +188,7 @@ function relativeFeatures(
  * @param context - レース単位で先に計算した材料
  */
 export function buildHorseFeatureRow(
-  entry: EntryWithDetails,
+  entry: EntryWithDetailsRow,
   index: number,
   context: RaceFeatureContext
 ): HorseFeatureRow {

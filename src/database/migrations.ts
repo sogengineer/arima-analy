@@ -42,8 +42,11 @@ const INDEX_MIGRATIONS: readonly string[] = [
 ];
 
 function hasColumn(db: Database, table: string, column: string): boolean {
-  // biome-ignore lint/plugin: PRAGMA はバインドできない。table は本ファイルの定数のみ
-  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  // テーブル名をバインドするため、PRAGMA 文ではなくテーブル値関数版を使う
+  // （`pragma_table_xinfo` は GENERATED 列も返す）
+  const rows = db
+    .prepare<{ name: string }, [string]>('SELECT name FROM pragma_table_xinfo(?)')
+    .all(table);
   return rows.some(row => row.name === column);
 }
 

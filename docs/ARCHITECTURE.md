@@ -85,7 +85,7 @@ sequenceDiagram
     Cmd->>Orch: getRaceByIdOrName("有馬")
     Orch->>Repo: getRaceWithVenue()
     Repo->>DB: SELECT races JOIN venues
-    DB-->>Repo: RaceWithVenue
+    DB-->>Repo: RaceWithVenueRow
     Repo-->>Orch: race
 
     Cmd->>Orch: calculateScoresForRace(raceId)
@@ -127,7 +127,7 @@ sequenceDiagram
 
     alt 未訓練
         ML->>ML: trainModels()
-        ML->>DB: getAllRaceResults()
+        ML->>DB: getRacesWithResults() / getRaceResults()
         DB-->>ML: 過去レース結果
 
         loop 各結果
@@ -310,7 +310,7 @@ sequenceDiagram
 
     BT->>Repo: getRacesWithResults(gradeOnly)
     Repo->>DB: SELECT races WITH results
-    DB-->>Repo: RaceWithVenue[]
+    DB-->>Repo: RaceWithVenueRow[]
     Repo-->>BT: 過去レース一覧
 
     loop 各レース
@@ -344,7 +344,7 @@ sequenceDiagram
     CLI->>ML: optimizeWeights(lambda=0.1)
 
     ML->>ML: prepareTrainingDataForRegression()
-    ML->>DB: getAllRaceResults()
+    ML->>DB: getRacesWithResults() / getRaceResults()
     DB-->>ML: 過去レース結果
 
     loop 各結果
@@ -418,6 +418,9 @@ src/
 │
 ├── database/                    # DB関連
 │   ├── DatabaseConnection.ts   # DB接続
+│   ├── QueryRunner.ts          # Kysely(組み立て) と bun:sqlite(実行) の橋渡し
+│   ├── schema/                 # Kysely のDB型定義（テーブル名→行型・列の仕様表）
+│   ├── migrations.ts           # 追加型マイグレーション
 │   └── schema.sql              # スキーマ定義
 │
 ├── utils/                       # ユーティリティ

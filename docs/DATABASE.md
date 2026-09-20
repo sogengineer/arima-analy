@@ -595,6 +595,33 @@ CREATE INDEX idx_entries_race ON race_entries(race_id);
 
 ---
 
+## クエリ層の構成
+
+SQL の**組み立ては Kysely**、**実行は bun:sqlite** に分かれています。
+
+| 役割 | 場所 |
+|------|------|
+| クエリの組み立て | `kysely`（`src/database/QueryRunner.ts` の `queryBuilder`） |
+| クエリの実行 | bun:sqlite（`selectRows` / `selectRow` / `runStatement`） |
+| DB の型定義（テーブル名 → 行型・列の仕様表） | `src/database/schema/` |
+| トランザクション | `DatabaseConnection.runInTransaction`（従来どおり） |
+
+`queryBuilder` はドライバを持たない Kysely インスタンス（`DummyDriver`）で、
+`.compile()` が返す `{ sql, parameters }` を実行ヘルパーが
+`prepare(sql).all(...parameters)` に渡します。実行は同期のままです。
+
+ビルダーの `.execute()` 系はこの構成では**エラーにならず空の結果を返す**ため、lint（error）で禁止しています。
+`QueryRunner` の import も repositories / database 層の外では lint（error）で禁止しています。
+
+### スキーマを変更するときの手順
+
+1. `src/database/schema.sql` を直す（既存DBに列を足す場合は `src/database/migrations.ts` にも追加する）
+2. `src/database/schema/` の行型と列の仕様表（`*_COLUMNS`）を同じ内容に直す
+   （`*_COLUMNS` の値は NULL 可否と生成種別の記述子で、行型から型レベルで強制されます）
+3. 本ドキュメントのテーブル定義を追随させる
+4. `bun test src/database` を流す（`pragma_table_xinfo` の `notnull` / `dflt_value` / `hidden` と
+   型定義を突き合わせ、列名だけでなく NULL 可否・DEFAULT・生成列のズレも落とします）
+
 ## スキーマファイル
 
 完全なスキーマ定義は以下のファイルにあります：

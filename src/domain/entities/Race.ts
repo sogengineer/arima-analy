@@ -2,8 +2,26 @@
  * レースエンティティ
  */
 
-import type { RaceWithVenue } from '../../types/RepositoryTypes';
 import { getDistanceCategory } from '../../constants/DistanceConstants';
+
+/**
+ * `Race.fromDbRecord` が読む列だけを表した構造
+ *
+ * @remarks
+ * entities は repositories に依存しないため、リポジトリの行型を import せずに構造で受ける。
+ * 省略可（`?: T`）と NULL 可（`T | null`）のどちらの表現の行でも受け取れるようにしている。
+ */
+export interface RaceDbRecord {
+  id: number;
+  race_name: string;
+  venue_name: string;
+  distance: number;
+  race_date: string;
+  race_type?: string | null;
+  race_class?: string | null;
+  track_condition?: string | null;
+  total_horses?: number | null;
+}
 
 export interface RaceData {
   id: number;
@@ -90,7 +108,7 @@ export class Race {
   /**
    * DBレコードから Race を生成
    */
-  static fromDbRecord(record: RaceWithVenue): Race {
+  static fromDbRecord(record: RaceDbRecord): Race {
     return new Race({
       id: record.id,
       name: record.race_name,
@@ -98,9 +116,9 @@ export class Race {
       distance: record.distance,
       raceType: record.race_type ?? '芝',
       date: record.race_date,
-      raceClass: record.race_class,
-      trackCondition: record.track_condition,
-      totalHorses: record.total_horses
+      raceClass: record.race_class ?? undefined,
+      trackCondition: record.track_condition ?? undefined,
+      totalHorses: record.total_horses ?? undefined
     });
   }
 
