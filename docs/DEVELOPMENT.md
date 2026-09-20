@@ -51,8 +51,10 @@ arima/
 │   │   ├── DistanceConstants.ts    # 距離・期間閾値
 │   │   └── MLConstants.ts          # 機械学習パラメータ
 │   ├── database/
-│   │   ├── Database.ts             # レガシーDB（後方互換）
 │   │   ├── DatabaseConnection.ts   # 接続管理
+│   │   ├── QueryRunner.ts          # Kysely(組み立て) と bun:sqlite(実行) の橋渡し
+│   │   ├── migrations.ts           # 追加型マイグレーション
+│   │   ├── schema/                 # Kysely のDB型定義（テーブル名→行型・列仕様表）
 │   │   └── schema.sql              # スキーマ定義
 │   ├── domain/                     # ドメイン層（リッチドメインモデル）
 │   │   ├── entities/
@@ -70,11 +72,14 @@ arima/
 │   │   │   ├── HorseQueryRepository.ts
 │   │   │   ├── RaceQueryRepository.ts
 │   │   │   ├── JockeyQueryRepository.ts
-│   │   │   └── StatsQueryRepository.ts
+│   │   │   ├── StatsQueryRepository.ts
+│   │   │   └── DataStatusQueryRepository.ts
 │   │   └── aggregates/             # 更新系（集約単位）
 │   │       ├── HorseAggregateRepository.ts
 │   │       ├── RaceAggregateRepository.ts
-│   │       └── ScoreAggregateRepository.ts
+│   │       ├── RaceRowWriters.ts   # レース系の行書き込み
+│   │       ├── ScoreAggregateRepository.ts
+│   │       └── EntryOddsAggregateRepository.ts
 │   ├── models/
 │   │   └── MachineLearningModel.ts # 機械学習モデル
 │   ├── types/
@@ -219,31 +224,27 @@ interface RaceInfo {
 
 #### データベース用型
 
-```typescript
-// 競走馬（DB）
-interface DBHorse {
-  id: number;
-  name: string;
-  birth_year: number;
-  sex: '牡' | '牝' | '騸';
-  sire_id: number;
-  mare_id: number;
-  trainer_id: number;
-  // ...
-}
+DB の行型は `src/database/schema/` に Kysely の型として置く（`src/types/` には置かない）。
+`Generated<>` は DEFAULT 付き・自動採番の列、`GeneratedAlways<>` は GENERATED ALWAYS の列を表す。
 
-// レース（DB）
-interface DBRace {
-  id: number;
-  race_date: string;
-  venue_id: number;
-  race_name: string;
-  race_class: string;
-  distance: number;
-  track_condition: '良' | '稍重' | '重' | '不良';
+```typescript
+// 競走馬（src/database/schema/CoreTables.ts）
+export interface HorsesTable {
+  id: Generated<number>;
+  name: string;
+  birth_year: number | null;
+  sex: '牡' | '牝' | '騸' | null;
+  sire_id: number | null;
+  trainer_id: number | null;
   // ...
 }
 ```
+
+取得系の戻り値には `Selectable<HorsesTable>` や、リポジトリが export する行型
+（`RaceWithVenueRow` のような JOIN 済みの形）を使う。
+domain の entities は repositories / database / kysely を import できないため、
+DB 由来の形を受け取る所だけ `src/types/` か entities 内の構造型
+（`HorseDetail` / `RaceDbRecord`）で受ける。
 
 ### 機械学習関連型
 
@@ -304,8 +305,11 @@ interface ScoreComponents {
 ```typescript
 import path from 'path';
 import { Database } from 'bun:sqlite';
-import { DBHorse } from '../types/HorseData.js';
+import type { Selectable } from 'kysely';
+import type { HorsesTable } from '../database/schema';
 ```
+
+相対 import に `.js` 拡張子は付けない（Biome プラグイン `no-js-import-extension` が検出する）。
 
 ### コメント
 
