@@ -9,6 +9,7 @@
   "assist": { "enabled": false },
   "plugins": [
     "./biome-plugins/no-sql-template-interpolation.grit",
+    "./biome-plugins/no-kysely-raw-sql.grit",
     "./biome-plugins/no-reduce-entries.grit",
     "./biome-plugins/no-js-import-extension.grit"
   ],
@@ -17,35 +18,35 @@
     "rules": {
       "preset": "recommended",
       "complexity": {
-        "noExcessiveCognitiveComplexity": { "level": "warn", "options": { "maxAllowedComplexity": 15 } },
-        "noExcessiveLinesPerFunction": { "level": "warn", "options": { "maxLines": 80 } },
-        "useOptionalChain": "warn",
-        "useMaxParams": { "level": "warn", "options": { "max": 5 } }
+        "noExcessiveCognitiveComplexity": { "level": "error", "options": { "maxAllowedComplexity": 15 } },
+        "noExcessiveLinesPerFunction": { "level": "error", "options": { "maxLines": 80 } },
+        "useOptionalChain": "error",
+        "useMaxParams": { "level": "error", "options": { "max": 5 } }
       },
       "correctness": {
-        "noUnusedVariables": "warn",
-        "noUnusedImports": "warn"
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error"
       },
       "nursery": {
-        "noFloatingPromises": "warn",
+        "noFloatingPromises": "error",
         "noImpliedEval": "error",
         "noExcessiveNestedCallbacks": { "level": "error", "options": { "max": 3 } }
       },
       "security": { "noGlobalEval": "error" },
       "style": {
-        "noNegationElse": "warn",
-        "noNestedTernary": "warn",
-        "noNonNullAssertion": "warn",
-        "noExcessiveLinesPerFile": { "level": "warn", "options": { "maxLines": 400 } },
-        "useImportType": "warn",
-        "noExcessiveClassesPerFile": "warn"
+        "noNegationElse": "error",
+        "noNestedTernary": "error",
+        "noNonNullAssertion": "error",
+        "noExcessiveLinesPerFile": { "level": "error", "options": { "maxLines": 400 } },
+        "useImportType": "error",
+        "noExcessiveClassesPerFile": "error"
       },
       "suspicious": {
-        "noExplicitAny": "warn",
+        "noExplicitAny": "error",
         "noFocusedTests": "error",
         "noSkippedTests": "error",
-        "noGlobalIsNan": "warn",
-        "useIterableCallbackReturn": "warn"
+        "noGlobalIsNan": "error",
+        "useIterableCallbackReturn": "error"
       }
     }
   },
@@ -60,7 +61,8 @@
               "level": "error",
               "options": {
                 "patterns": [
-                  { "group": ["**/commands/**", "**/commands"], "message": "domain 層は commands を import しない。" }
+                  { "group": ["**/commands/**", "**/commands"], "message": "domain 層は commands を import しない。" },
+                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。クエリの組み立てをドメインに持ち込まない。" }
                 ]
               }
             }
@@ -99,7 +101,8 @@
                       "**/utils/**", "**/utils"
                     ],
                     "message": "entities / valueObjects は repositories / database / commands / models / utils に依存しない。純粋な計算に保つこと。"
-                  }
+                  },
+                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。クエリの組み立てをドメインに持ち込まない。" }
                 ]
               }
             }
@@ -151,7 +154,8 @@
                       "**/features/**", "**/features"
                     ],
                     "message": "constants / types は依存の末端。他層を import しない。"
-                  }
+                  },
+                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。DB の型定義は src/database/schema に置く。" }
                 ]
               }
             }
@@ -160,7 +164,28 @@
       }
     },
     {
-      "includes": ["src/models/**", "src/utils/**", "src/features/**", "src/database/**"],
+      "includes": ["src/models/**", "src/utils/**", "src/features/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["**/commands/**", "**/commands"],
+                    "message": "models / utils / features / database は commands を import しない（依存は index.ts → commands → 下位層の一方向）。"
+                  },
+                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。SQL の組み立てはリポジトリに置く。" }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/database/**"],
       "linter": {
         "rules": {
           "style": {
@@ -178,6 +203,31 @@
           }
         }
       }
+    },
+    {
+      "includes": ["src/commands/**", "src/index.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  { "group": ["kysely", "kysely/**"], "message": "Kysely は repositories / database 層だけで使う。commands から SQL を組み立てない。" }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/repositories/**", "src/database/**"],
+      "plugins": ["./biome-plugins/no-kysely-builder-execution.grit"]
+    },
+    {
+      "includes": ["src/**", "!src/database/**", "!**/__test__/**", "!src/test/**"],
+      "plugins": ["./biome-plugins/no-direct-statement-preparation.grit"]
     },
     {
       "includes": [

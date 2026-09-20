@@ -1,0 +1,21 @@
+language js
+
+// Kysely の `sql.raw()` / `sql.lit()` は、渡した文字列をそのまま SQL 本文に埋め込む
+// （バインドされない）。外部由来の値が一度でも混ざれば SQL インジェクションの入口になるため禁止する。
+// `sql` タグ付きテンプレート（`` sql`... ${value} ...` ``）の補間はバインドパラメータになるので許可。
+or {
+  `sql.raw($...)` as $d where {
+    register_diagnostic(
+      span = $d,
+      message = "sql.raw() は SQL 本文に文字列をそのまま埋め込む。バインドされる `sql` タグ付きテンプレートか、ビルダーの式で書くこと。",
+      severity = "error"
+    )
+  },
+  `sql.lit($...)` as $d where {
+    register_diagnostic(
+      span = $d,
+      message = "sql.lit() は値をリテラルとして SQL 本文に埋め込む。バインドされる `sql` タグ付きテンプレートか、ビルダーの式で書くこと。",
+      severity = "error"
+    )
+  }
+}

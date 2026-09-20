@@ -7,14 +7,14 @@ or {
     register_diagnostic(
       span = $d,
       message = "domain 層では引数なしの new Date() を使わない。基準日を引数で受け取ること。",
-      severity = "warn"
+      severity = "error"
     )
   },
   `Date.now()` as $d where {
     register_diagnostic(
       span = $d,
       message = "domain 層では Date.now() を使わない。基準日を引数で受け取ること。",
-      severity = "warn"
+      severity = "error"
     )
   }
 }

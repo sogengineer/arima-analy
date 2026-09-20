@@ -1,0 +1,21 @@
+language js
+
+// Kysely はクエリビルダとしてだけ使い、実行は bun:sqlite（src/database/QueryRunner.ts のヘルパー）で行う。
+// この構成のビルダーは DummyDriver 越しなので、`.execute()` 系を呼んでも**エラーにならず空の結果が返る**。
+// 静かに 0 件になる事故を防ぐため、実行系メソッドの呼び出しを禁止する。
+// 適用範囲は biome.json の overrides 側で src/repositories と src/database に絞る
+// （commands の `command.execute()` を誤検出しないため。メソッド名の照合は完全一致で、
+//  `executeQuery` のような別名は検出しない）。
+`$builder.$method($...)` as $d where {
+  $method <: or {
+    `execute`,
+    `executeTakeFirst`,
+    `executeTakeFirstOrThrow`,
+    `stream`
+  },
+  register_diagnostic(
+    span = $d,
+    message = "Kysely ビルダーの実行系メソッドは使わない（DummyDriver のため空の結果が返る）。`.compile()` した結果を src/database/QueryRunner.ts の selectRows / selectRow / runStatement に渡すこと。",
+    severity = "error"
+  )
+}
