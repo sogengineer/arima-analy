@@ -76,6 +76,10 @@ function toBindings(parameters: ReadonlyArray<unknown>): SQLQueryBindings[] {
 /**
  * SELECT を実行して全行を返す
  *
+ * @remarks
+ * SELECT と書き込みの取り違えは型では止まらない（`CompiledQuery` はどちらも同じ型）。
+ * 書き込み文をここに渡すと結果が返らないだけなので、呼び分けは書き手が担保すること。
+ *
  * @param db - bun:sqlite の接続
  * @param compiled - `queryBuilder` で組み立てて `.compile()` したクエリ
  * @returns Kysely が推論した行型の配列
@@ -99,6 +103,9 @@ export function selectRow<TRow>(db: SqliteDatabase, compiled: CompiledQuery<TRow
  * @remarks
  * トランザクションはこのヘルパーでは扱わない。従来どおり `DatabaseConnection.runInTransaction`
  * （bun:sqlite の `db.transaction`）で囲むこと。
+ *
+ * SELECT と書き込みの取り違えは型では止まらない（`CompiledQuery` はどちらも同じ型）。
+ * SELECT をここに渡すと行が読めないまま実行されるので、呼び分けは書き手が担保すること。
  *
  * @returns 変更行数と最後の rowid
  */

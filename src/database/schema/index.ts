@@ -6,7 +6,7 @@
  * ここは Kysely の型を import するため `src/types/` には置けない（constants / types は他層を
  * import しない規約）。スキーマを変更したら **schema.sql → この型定義 → docs/DATABASE.md** の順で追随させる。
  * ズレの検出は `src/database/__test__/DatabaseSchema.test.ts` が実 SQLite の `PRAGMA table_info` と
- * `TABLE_COLUMNS` を突き合わせて行う。
+ * `TABLE_COLUMNS` / `VIEW_COLUMNS` を突き合わせて行う。
  */
 
 import {
@@ -28,7 +28,7 @@ import {
 } from './StatsTables';
 import { V_HORSE_DETAILS_COLUMNS, V_RACE_RESULTS_DETAIL_COLUMNS } from './Views';
 
-import type { ColumnNames } from './ColumnNames';
+import type { ColumnNames, ViewColumnNames } from './ColumnNames';
 import type {
   BreedersTable,
   JockeysTable,
@@ -48,7 +48,7 @@ import type {
 } from './StatsTables';
 import type { HorseDetailsView, RaceResultsDetailView } from './Views';
 
-export type { ColumnNames } from './ColumnNames';
+export type { ColumnDescriptor, ColumnNames, GeneratedKind, ViewColumnNames } from './ColumnNames';
 export * from './MasterTables';
 export * from './CoreTables';
 export * from './StatsTables';
@@ -81,14 +81,21 @@ export interface Database {
   v_race_results_detail: RaceResultsDetailView;
 }
 
+/** ビュー名（読み取り専用。突き合わせは列名の集合だけ） */
+export type ViewName = 'v_horse_details' | 'v_race_results_detail';
+
+/** 実テーブル名（`Database` からビューを除いたもの） */
+export type TableName = Exclude<keyof Database, ViewName>;
+
 /**
- * テーブル名・ビュー名 → 列名表
+ * 実テーブル名 → 列の仕様表
  *
  * @remarks
- * 型が `{ [K in keyof Database]: ColumnNames<Database[K]> }` なので、
+ * 型が `{ [K in TableName]: ColumnNames<Database[K]> }` なので、
  * `Database` にテーブルを足してここに書き忘れるとコンパイルエラーになる。
+ * 各列の記述子（NULL 可否・生成種別）も行型から導かれるため、型定義とズレた値は書けない。
  */
-export const TABLE_COLUMNS: { [K in keyof Database]: ColumnNames<Database[K]> } = {
+export const TABLE_COLUMNS: { [K in TableName]: ColumnNames<Database[K]> } = {
   venues: VENUES_COLUMNS,
   sires: SIRES_COLUMNS,
   mares: MARES_COLUMNS,
@@ -104,13 +111,17 @@ export const TABLE_COLUMNS: { [K in keyof Database]: ColumnNames<Database[K]> } 
   horse_course_stats: HORSE_COURSE_STATS_COLUMNS,
   horse_track_stats: HORSE_TRACK_STATS_COLUMNS,
   jockey_trainer_stats: JOCKEY_TRAINER_STATS_COLUMNS,
-  horse_scores: HORSE_SCORES_COLUMNS,
+  horse_scores: HORSE_SCORES_COLUMNS
+};
+
+/** ビュー名 → 列名の集合 */
+export const VIEW_COLUMNS: { [K in ViewName]: ViewColumnNames<Database[K]> } = {
   v_horse_details: V_HORSE_DETAILS_COLUMNS,
   v_race_results_detail: V_RACE_RESULTS_DETAIL_COLUMNS
 };
 
 /** 実テーブル名（ビューを除く）。DDL と突き合わせる側の走査に使う */
-export const TABLE_NAMES: readonly (keyof Database)[] = [
+export const TABLE_NAMES: readonly TableName[] = [
   'venues',
   'sires',
   'mares',
@@ -129,5 +140,5 @@ export const TABLE_NAMES: readonly (keyof Database)[] = [
   'horse_scores'
 ];
 
-/** ビュー名。`PRAGMA table_info` は実テーブルと同じく列を返す */
-export const VIEW_NAMES: readonly (keyof Database)[] = ['v_horse_details', 'v_race_results_detail'];
+/** ビュー名。`pragma_table_xinfo` は実テーブルと同じく列を返す */
+export const VIEW_NAMES: readonly ViewName[] = ['v_horse_details', 'v_race_results_detail'];

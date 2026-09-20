@@ -97,75 +97,75 @@ export interface HorseScoresTable {
 }
 
 export const BLOODLINE_STATS_COLUMNS: ColumnNames<BloodlineStatsTable> = {
-  id: true,
-  sire_id: true,
-  race_type: true,
-  distance_category: true,
-  track_condition: true,
-  runs: true,
-  wins: true,
-  places: true,
-  shows: true,
-  win_rate: true,
-  place_rate: true,
-  show_rate: true,
-  updated_at: true
+  id: { nullable: false, generated: 'default' },
+  sire_id: { nullable: false, generated: 'no' },
+  race_type: { nullable: true, generated: 'no' },
+  distance_category: { nullable: true, generated: 'no' },
+  track_condition: { nullable: true, generated: 'no' },
+  runs: { nullable: false, generated: 'default' },
+  wins: { nullable: false, generated: 'default' },
+  places: { nullable: false, generated: 'default' },
+  shows: { nullable: false, generated: 'default' },
+  win_rate: { nullable: false, generated: 'always' },
+  place_rate: { nullable: false, generated: 'always' },
+  show_rate: { nullable: false, generated: 'always' },
+  updated_at: { nullable: false, generated: 'default' }
 };
 
 export const HORSE_COURSE_STATS_COLUMNS: ColumnNames<HorseCourseStatsTable> = {
-  id: true,
-  horse_id: true,
-  venue_id: true,
-  race_type: true,
-  distance_category: true,
-  runs: true,
-  wins: true,
-  places: true,
-  shows: true,
-  avg_finish_position: true,
-  avg_last_3f_time: true,
-  updated_at: true
+  id: { nullable: false, generated: 'default' },
+  horse_id: { nullable: false, generated: 'no' },
+  venue_id: { nullable: false, generated: 'no' },
+  race_type: { nullable: true, generated: 'no' },
+  distance_category: { nullable: true, generated: 'no' },
+  runs: { nullable: false, generated: 'default' },
+  wins: { nullable: false, generated: 'default' },
+  places: { nullable: false, generated: 'default' },
+  shows: { nullable: false, generated: 'default' },
+  avg_finish_position: { nullable: true, generated: 'no' },
+  avg_last_3f_time: { nullable: true, generated: 'no' },
+  updated_at: { nullable: false, generated: 'default' }
 };
 
 export const HORSE_TRACK_STATS_COLUMNS: ColumnNames<HorseTrackStatsTable> = {
-  id: true,
-  horse_id: true,
-  race_type: true,
-  track_condition: true,
-  runs: true,
-  wins: true,
-  places: true,
-  shows: true,
-  avg_finish_position: true,
-  updated_at: true
+  id: { nullable: false, generated: 'default' },
+  horse_id: { nullable: false, generated: 'no' },
+  race_type: { nullable: true, generated: 'no' },
+  track_condition: { nullable: true, generated: 'no' },
+  runs: { nullable: false, generated: 'default' },
+  wins: { nullable: false, generated: 'default' },
+  places: { nullable: false, generated: 'default' },
+  shows: { nullable: false, generated: 'default' },
+  avg_finish_position: { nullable: true, generated: 'no' },
+  updated_at: { nullable: false, generated: 'default' }
 };
 
 export const JOCKEY_TRAINER_STATS_COLUMNS: ColumnNames<JockeyTrainerStatsTable> = {
-  id: true,
-  jockey_id: true,
-  trainer_id: true,
-  runs: true,
-  wins: true,
-  places: true,
-  shows: true,
-  win_rate: true,
-  updated_at: true
+  id: { nullable: false, generated: 'default' },
+  jockey_id: { nullable: false, generated: 'no' },
+  trainer_id: { nullable: false, generated: 'no' },
+  runs: { nullable: false, generated: 'default' },
+  wins: { nullable: false, generated: 'default' },
+  places: { nullable: false, generated: 'default' },
+  shows: { nullable: false, generated: 'default' },
+  win_rate: { nullable: false, generated: 'always' },
+  updated_at: { nullable: false, generated: 'default' }
 };
 
 export const HORSE_SCORES_COLUMNS: ColumnNames<HorseScoresTable> = {
-  id: true,
-  horse_id: true,
-  race_id: true,
-  recent_performance_score: true,
-  course_aptitude_score: true,
-  distance_aptitude_score: true,
-  last_3f_ability_score: true,
-  g1_achievement_score: true,
-  rotation_score: true,
-  track_condition_score: true,
-  jockey_score: true,
-  trainer_score: true,
-  post_position_score: true,
-  total_score: true,
-  created_at: true
+  id: { nullable: false, generated: 'default' },
+  horse_id: { nullable: false, generated: 'no' },
+  race_id: { nullable: true, generated: 'no' },
+  recent_performance_score: { nullable: false, generated: 'default' },
+  course_aptitude_score: { nullable: false, generated: 'default' },
+  distance_aptitude_score: { nullable: false, generated: 'default' },
+  last_3f_ability_score: { nullable: false, generated: 'default' },
+  g1_achievement_score: { nullable: false, generated: 'default' },
+  rotation_score: { nullable: false, generated: 'default' },
+  track_condition_score: { nullable: false, generated: 'default' },
+  jockey_score: { nullable: false, generated: 'default' },
+  trainer_score: { nullable: false, generated: 'default' },
+  post_position_score: { nullable: false, generated: 'default' },
+  total_score: { nullable: false, generated: 'default' },
+  created_at: { nullable: false, generated: 'default' }
 };

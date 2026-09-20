@@ -66,49 +66,49 @@ export interface JockeysTable {
 }
 
 export const VENUES_COLUMNS: ColumnNames<VenuesTable> = {
-  id: true,
-  name: true,
-  region: true,
-  created_at: true
+  id: { nullable: false, generated: 'default' },
+  name: { nullable: false, generated: 'no' },
+  region: { nullable: true, generated: 'no' },
+  created_at: { nullable: false, generated: 'default' }
 };
 
 export const SIRES_COLUMNS: ColumnNames<SiresTable> = {
-  id: true,
-  name: true,
-  country: true,
-  created_at: true
+  id: { nullable: false, generated: 'default' },
+  name: { nullable: false, generated: 'no' },
+  country: { nullable: true, generated: 'no' },
+  created_at: { nullable: false, generated: 'default' }
 };
 
 export const MARES_COLUMNS: ColumnNames<MaresTable> = {
-  id: true,
-  name: true,
-  sire_id: true,
-  created_at: true
+  id: { nullable: false, generated: 'default' },
+  name: { nullable: false, generated: 'no' },
+  sire_id: { nullable: true, generated: 'no' },
+  created_at: { nullable: false, generated: 'default' }
 };
 
 export const TRAINERS_COLUMNS: ColumnNames<TrainersTable> = {
-  id: true,
-  name: true,
-  stable: true,
-  created_at: true
+  id: { nullable: false, generated: 'default' },
+  name: { nullable: false, generated: 'no' },
+  stable: { nullable: true, generated: 'no' },
+  created_at: { nullable: false, generated: 'default' }
 };
 
 export const OWNERS_COLUMNS: ColumnNames<OwnersTable> = {
-  id: true,
-  name: true,
-  created_at: true
+  id: { nullable: false, generated: 'default' },
+  name: { nullable: false, generated: 'no' },
+  created_at: { nullable: false, generated: 'default' }
 };
 
 export const BREEDERS_COLUMNS: ColumnNames<BreedersTable> = {
-  id: true,
-  name: true,
-  created_at: true
+  id: { nullable: false, generated: 'default' },
+  name: { nullable: false, generated: 'no' },
+  created_at: { nullable: false, generated: 'default' }
 };
 
 export const JOCKEYS_COLUMNS: ColumnNames<JockeysTable> = {
-  id: true,
-  name: true,
-  default_weight: true,
-  apprentice_status: true,
-  created_at: true
+  id: { nullable: false, generated: 'default' },
+  name: { nullable: false, generated: 'no' },
+  default_weight: { nullable: true, generated: 'no' },
+  apprentice_status: { nullable: true, generated: 'no' },
+  created_at: { nullable: false, generated: 'default' }
 };

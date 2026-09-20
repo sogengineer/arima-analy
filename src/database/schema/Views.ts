@@ -3,11 +3,13 @@
  *
  * @remarks
  * ビューは読み取り専用なので `Generated<>` は使わず、SELECT 結果の型だけを書く。
+ * 実スキーマとの突き合わせも列名の集合だけで行う（ビューの `pragma_table_xinfo` は
+ * 元テーブルの NOT NULL / DEFAULT を引き継がないため、記述子を比べても意味がない）。
  * 元テーブルを LEFT JOIN している列は NULL になりうる（`v_horse_details` の血統・厩舎系）。
  * `v_race_results_detail` は内部 JOIN のみなので、元テーブルで NOT NULL の列は NULL にならない。
  */
 
-import type { ColumnNames } from './ColumnNames';
+import type { ViewColumnNames } from './ColumnNames';
 
 /** 馬詳細ビュー（血統込み） */
 export interface HorseDetailsView {
@@ -49,7 +51,7 @@ export interface RaceResultsDetailView {
   win_odds: number | null;
 }
 
-export const V_HORSE_DETAILS_COLUMNS: ColumnNames<HorseDetailsView> = {
+export const V_HORSE_DETAILS_COLUMNS: ViewColumnNames<HorseDetailsView> = {
   id: true,
   name: true,
   birth_year: true,
@@ -63,7 +65,7 @@ export const V_HORSE_DETAILS_COLUMNS: ColumnNames<HorseDetailsView> = {
   breeder_name: true
 };
 
-export const V_RACE_RESULTS_DETAIL_COLUMNS: ColumnNames<RaceResultsDetailView> = {
+export const V_RACE_RESULTS_DETAIL_COLUMNS: ViewColumnNames<RaceResultsDetailView> = {
   race_date: true,
   venue: true,
   race_number: true,
