@@ -106,6 +106,13 @@ CREATE TABLE IF NOT EXISTS races (
     total_horses INTEGER,
     prize_money TEXT,
     jra_race_id TEXT UNIQUE,
+    grade TEXT,                 -- G1 / G2 / G3 / J.G1（重賞のみ）
+    course_detail TEXT,         -- 「芝・右 外」等のコース詳細
+    weather TEXT,               -- 天候
+    start_time TEXT,            -- 発走時刻
+    kaisai_label TEXT,          -- 「4回中山5日」
+    lap_times TEXT,             -- ハロンタイム
+    updated_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (venue_id) REFERENCES venues(id),
     UNIQUE(race_date, venue_id, race_number)
@@ -154,6 +161,7 @@ CREATE TABLE IF NOT EXISTS race_results (
     corner_positions TEXT,
     final_win_odds REAL,
     final_place_odds REAL,
+    rating INTEGER,             -- JRA公式レーティング
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (entry_id) REFERENCES race_entries(id)
 );
@@ -277,12 +285,17 @@ CREATE TABLE IF NOT EXISTS horse_scores (
 CREATE INDEX IF NOT EXISTS idx_horses_sire ON horses(sire_id);
 CREATE INDEX IF NOT EXISTS idx_horses_trainer ON horses(trainer_id);
 CREATE INDEX IF NOT EXISTS idx_horses_name ON horses(name);
+-- 血統登録番号は同名馬を区別できる唯一のキー。NULLは重複を許す部分インデックス
+-- （既存DB向けの同じ定義が src/database/migrations.ts にもある）
+CREATE UNIQUE INDEX IF NOT EXISTS idx_horses_jra_id
+    ON horses(jra_horse_id) WHERE jra_horse_id IS NOT NULL;
 
 -- レース検索
 CREATE INDEX IF NOT EXISTS idx_races_date ON races(race_date);
 CREATE INDEX IF NOT EXISTS idx_races_venue ON races(venue_id);
 CREATE INDEX IF NOT EXISTS idx_races_class ON races(race_class);
 CREATE INDEX IF NOT EXISTS idx_races_date_venue ON races(race_date, venue_id);
+CREATE INDEX IF NOT EXISTS idx_races_grade ON races(grade);
 
 -- エントリー検索
 CREATE INDEX IF NOT EXISTS idx_entries_race ON race_entries(race_id);

@@ -95,7 +95,7 @@ function seedBasicData(
   raceRepo: RaceAggregateRepository
 ): void {
   // 馬を3頭登録
-  const horse1 = horseRepo.insertHorseWithBloodline({
+  horseRepo.insertHorseWithBloodline({
     name: 'テスト馬A',
     birthYear: 2020,
     sex: '牡',
@@ -104,7 +104,7 @@ function seedBasicData(
     trainer: 'テスト調教師'
   });
 
-  const horse2 = horseRepo.insertHorseWithBloodline({
+  horseRepo.insertHorseWithBloodline({
     name: 'テスト馬B',
     birthYear: 2020,
     sex: '牝',
@@ -113,7 +113,7 @@ function seedBasicData(
     trainer: 'テスト調教師'
   });
 
-  const horse3 = horseRepo.insertHorseWithBloodline({
+  horseRepo.insertHorseWithBloodline({
     name: 'テスト馬C',
     birthYear: 2020,
     sex: '牡',

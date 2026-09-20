@@ -1,4 +1,4 @@
-import { HorseDataExtractor } from '../utils/HorseDataExtractor.js';
+import { HorseDataExtractor } from '../utils/HorseDataExtractor';
 import { writeFileSync } from 'node:fs';
 
 export class ExtractData {
@@ -25,7 +25,9 @@ export class ExtractData {
       // 警告表示
       if (result.warnings && result.warnings.length > 0) {
         console.log('\n⚠️  警告:');
-        result.warnings.forEach(warning => console.log(`  - ${warning}`));
+        for (const warning of result.warnings) {
+          console.log(`  - ${warning}`);
+        }
       }
 
       // JSONファイルにも保存（詳細フォーマットの場合）

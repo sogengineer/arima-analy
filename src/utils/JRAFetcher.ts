@@ -1,8 +1,8 @@
 import https from 'node:https';
 import http from 'node:http';
-import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import type { IncomingMessage, RequestOptions } from 'node:http';
 import zlib from 'node:zlib';
-import iconv from 'iconv-lite';
+import { convertEncoding, displayBasicInfo, saveToFile } from './JRAFetcherIO';
 
 export interface FetchOptions {
   outputFile?: string;
@@ -22,6 +22,13 @@ export interface FetchResult {
   error?: string;
 }
 
+/** 1リクエストぶんの取得コンテキスト（レスポンス処理に持ち回る） */
+interface FetchContext {
+  encoding: string;
+  createDirectory: boolean;
+  outputFile?: string;
+}
+
 export class JRAFetcher {
   private readonly defaultOptions: Required<Omit<FetchOptions, 'outputFile'>> = {
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -30,118 +37,86 @@ export class JRAFetcher {
     createDirectory: true
   };
 
+  /** 取得を許可するホスト（JRA公式サイトのみ） */
+  private static readonly ALLOWED_HOST_SUFFIXES = ['jra.go.jp'];
+
+  /**
+   * 連続リクエストの最小間隔（ミリ秒）
+   *
+   * @remarks
+   * 公式サイトへの負荷を避けるため、プロセス全体で直列に2秒以上空ける。
+   */
+  private static readonly MIN_INTERVAL_MS = 2000;
+  private static lastRequestAt = 0;
+
+  /** 直前のリクエストから最小間隔が経過するまで待つ */
+  private static async throttle(): Promise<void> {
+    const wait = JRAFetcher.lastRequestAt + JRAFetcher.MIN_INTERVAL_MS - Date.now();
+    if (wait > 0) {
+      await new Promise(resolve => setTimeout(resolve, wait));
+    }
+    JRAFetcher.lastRequestAt = Date.now();
+  }
+
+  /**
+   * 取得対象URLを検証する
+   *
+   * @remarks
+   * 未検証のURLをそのまま fetch すると、file:// や社内ネットワーク等の
+   * 意図しない宛先へのリクエスト（SSRF）につながるため、
+   * スキームを http/https に限定し、ホストをJRA公式ドメインに限定する。
+   *
+   * @param url - 検証対象URL
+   * @returns エラーメッセージ（問題なければ null）
+   */
+  static validateUrl(url: string): string | null {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return `URLの形式が不正です: ${url}`;
+    }
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return `サポートされていないスキームです: ${parsed.protocol}（http/httpsのみ）`;
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    const allowed = JRAFetcher.ALLOWED_HOST_SUFFIXES.some(
+      suffix => host === suffix || host.endsWith(`.${suffix}`)
+    );
+    if (!allowed) {
+      return `許可されていないホストです: ${parsed.hostname}（${JRAFetcher.ALLOWED_HOST_SUFFIXES.join(', ')} のみ）`;
+    }
+
+    return null;
+  }
+
   async fetchHTML(url: string, options: FetchOptions = {}): Promise<FetchResult> {
     const opts = { ...this.defaultOptions, ...options };
-    
+
+    const validationError = JRAFetcher.validateUrl(url);
+    if (validationError) {
+      return { success: false, error: validationError };
+    }
+
+    // 公式サイトへの負荷を避けるため、全リクエストを最小間隔で直列化する
+    await JRAFetcher.throttle();
+
+    const context: FetchContext = {
+      encoding: opts.encoding,
+      createDirectory: opts.createDirectory,
+      outputFile: options.outputFile
+    };
+
     return new Promise((resolve) => {
       const client = url.startsWith('https:') ? https : http;
-      
-      const requestOptions = {
-        headers: {
-          'User-Agent': opts.userAgent,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'DNT': '1',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1',
-        },
-      };
+      const requestOptions = JRAFetcher.buildRequestOptions(opts.userAgent);
 
       console.log(`🌐 JRAページを取得中: ${url}`);
 
-      const request = client.get(url, requestOptions, (response) => {
-        console.log(`📡 ステータス: ${response.statusCode}`);
-        console.log(`📋 Content-Type: ${response.headers['content-type']}`);
-        console.log(`🗜️ Content-Encoding: ${response.headers['content-encoding'] || 'none'}`);
-
-        if (response.statusCode !== 200) {
-          resolve({
-            success: false,
-            error: `HTTPエラー: ${response.statusCode} ${response.statusMessage}`
-          });
-          return;
-        }
-
-        // エンコーディングに応じてデコンプレッションストリームを作成
-        let stream: NodeJS.ReadableStream = response;
-        const encoding = response.headers['content-encoding'];
-        
-        try {
-          if (encoding === 'gzip') {
-            stream = response.pipe(zlib.createGunzip());
-          } else if (encoding === 'deflate') {
-            stream = response.pipe(zlib.createInflate());
-          } else if (encoding === 'br') {
-            stream = response.pipe(zlib.createBrotliDecompress());
-          }
-        } catch (error) {
-          resolve({
-            success: false,
-            error: `圧縮解除エラー: ${error}`
-          });
-          return;
-        }
-
-        const chunks: Buffer[] = [];
-
-        // データの受信（バイナリバッファとして蓄積）
-        stream.on('data', (chunk: Buffer) => {
-          chunks.push(chunk);
-        });
-
-        // エラーハンドリング（デコンプレッション用）
-        stream.on('error', (error) => {
-          resolve({
-            success: false,
-            error: `ストリームエラー: ${error.message}`
-          });
-        });
-
-        // 受信完了
-        stream.on('end', () => {
-          try {
-            // バッファを結合
-            const buffer = Buffer.concat(chunks);
-            
-            // エンコーディング変換
-            const data = this.convertEncoding(buffer, opts.encoding);
-            
-            console.log(`📄 HTMLサイズ: ${data.length} 文字`);
-
-            // ファイルに保存
-            let outputFile = options.outputFile;
-            if (outputFile) {
-              const result = this.saveToFile(data, outputFile, opts.createDirectory);
-              if (!result.success) {
-                resolve({
-                  success: false,
-                  error: result.error
-                });
-                return;
-              }
-              outputFile = result.outputFile;
-            }
-
-            // 基本情報の表示
-            this.displayBasicInfo(data);
-
-            resolve({
-              success: true,
-              data,
-              outputFile,
-              size: data.length,
-              contentType: response.headers['content-type'] as string,
-              encoding: encoding as string
-            });
-
-          } catch (error) {
-            resolve({
-              success: false,
-              error: `データ処理エラー: ${error}`
-            });
-          }
-        });
+      const request = client.request(url, requestOptions, (response) => {
+        this.receiveResponse(response, context, resolve);
       });
 
       // エラーハンドリング
@@ -155,88 +130,144 @@ export class JRAFetcher {
       // タイムアウト設定
       request.setTimeout(opts.timeout, () => {
         console.error(`❌ タイムアウト: ${opts.timeout / 1000}秒以内にレスポンスがありませんでした`);
-        request.abort();
+        request.destroy();
         resolve({
           success: false,
           error: `タイムアウト: ${opts.timeout / 1000}秒`
         });
       });
 
+      request.end();
+
       console.log('⏳ HTML取得中...');
     });
   }
 
-  private convertEncoding(buffer: Buffer, encoding: string): string {
-    try {
-      switch (encoding.toLowerCase()) {
-        case 'shift_jis':
-        case 'shift-jis':
-          return iconv.decode(buffer, 'shift_jis');
-        case 'utf-8':
-        case 'utf8':
-          return buffer.toString('utf8');
-        case 'euc-jp':
-          return iconv.decode(buffer, 'euc-jp');
-        default:
-          // Shift_JISで試行してから、失敗したらUTF-8
-          try {
-            return iconv.decode(buffer, 'shift_jis');
-          } catch {
-            return buffer.toString('utf8');
-          }
-      }
-    } catch (error) {
-      console.warn(`エンコーディング変換エラー (${encoding}):`, error);
-      return buffer.toString('utf8');
-    }
+  private static buildRequestOptions(userAgent: string): RequestOptions {
+    return {
+      method: 'GET',
+      headers: {
+        'User-Agent': userAgent,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+      },
+    };
   }
 
-  private saveToFile(data: string, outputFile: string, createDirectory: boolean): 
-    { success: boolean; outputFile?: string; error?: string } {
-    
-    try {
-      // ディレクトリの作成
-      if (createDirectory) {
-        const outputDir = outputFile.substring(0, outputFile.lastIndexOf('/'));
-        if (outputDir && !existsSync(outputDir)) {
-          mkdirSync(outputDir, { recursive: true });
-        }
-      }
+  /** Content-Encoding に応じて解凍ストリームを被せる */
+  private static decompress(
+    response: IncomingMessage,
+    contentEncoding: string | undefined
+  ): NodeJS.ReadableStream {
+    if (contentEncoding === 'gzip') return response.pipe(zlib.createGunzip());
+    if (contentEncoding === 'deflate') return response.pipe(zlib.createInflate());
+    if (contentEncoding === 'br') return response.pipe(zlib.createBrotliDecompress());
+    return response;
+  }
 
-      writeFileSync(outputFile, data, 'utf8');
-      console.log(`✅ HTMLファイルを保存: ${outputFile}`);
+  /** レスポンスを受け取り、本文を読み切って結果を resolve する */
+  private receiveResponse(
+    response: IncomingMessage,
+    context: FetchContext,
+    resolve: (result: FetchResult) => void
+  ): void {
+    console.log(`📡 ステータス: ${response.statusCode}`);
+    console.log(`📋 Content-Type: ${response.headers['content-type']}`);
+    console.log(`🗜️ Content-Encoding: ${response.headers['content-encoding'] || 'none'}`);
 
-      return {
-        success: true,
-        outputFile
-      };
-    } catch (error) {
-      return {
+    if (response.statusCode !== 200) {
+      resolve({
         success: false,
-        error: `ファイル保存エラー: ${error}`
-      };
+        error: `HTTPエラー: ${response.statusCode} ${response.statusMessage}`
+      });
+      return;
     }
+
+    const contentEncoding = response.headers['content-encoding'];
+    let stream: NodeJS.ReadableStream;
+    try {
+      stream = JRAFetcher.decompress(response, contentEncoding);
+    } catch (error) {
+      resolve({
+        success: false,
+        error: `圧縮解除エラー: ${error}`
+      });
+      return;
+    }
+
+    const chunks: Buffer[] = [];
+
+    // データの受信（バイナリバッファとして蓄積）
+    stream.on('data', (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+
+    // エラーハンドリング（デコンプレッション用）
+    stream.on('error', (error) => {
+      resolve({
+        success: false,
+        error: `ストリームエラー: ${error.message}`
+      });
+    });
+
+    // 受信完了
+    stream.on('end', () => {
+      try {
+        resolve(this.buildResult(chunks, response, contentEncoding, context));
+      } catch (error) {
+        resolve({
+          success: false,
+          error: `データ処理エラー: ${error}`
+        });
+      }
+    });
   }
 
-  private displayBasicInfo(data: string): void {
-    // 基本情報の抽出表示
-    const titleMatch = data.match(/<title>(.*?)<\/title>/i);
-    if (titleMatch) {
-      console.log(`🏇 ページタイトル: ${titleMatch[1]}`);
+  /** 受信バッファをデコードし、必要ならファイルに保存して結果を組み立てる */
+  private buildResult(
+    chunks: Buffer[],
+    response: IncomingMessage,
+    contentEncoding: string | undefined,
+    context: FetchContext
+  ): FetchResult {
+    const buffer = Buffer.concat(chunks);
+    const data = convertEncoding(buffer, context.encoding);
+
+    console.log(`📄 HTMLサイズ: ${data.length} 文字`);
+
+    let outputFile = context.outputFile;
+    if (outputFile) {
+      const saved = saveToFile(data, outputFile, context.createDirectory);
+      if (!saved.success) {
+        return { success: false, error: saved.error };
+      }
+      outputFile = saved.outputFile;
     }
 
-    // テーブル数の確認
-    const tableCount = (data.match(/<table[^>]*>/gi) || []).length;
-    console.log(`📊 テーブル数: ${tableCount}`);
+    // 基本情報の表示
+    displayBasicInfo(data);
+
+    return {
+      success: true,
+      data,
+      outputFile,
+      size: data.length,
+      contentType: response.headers['content-type'] as string,
+      encoding: contentEncoding as string
+    };
   }
 
   displayNextSteps(outputFile?: string): void {
     console.log('\n🔍 次のステップ:');
     if (outputFile) {
-      console.log('1. TypeScript抽出機能で詳細解析:');
-      console.log(`   npx tsx src/index.ts extract-html "${outputFile}"`);
-      console.log('2. またはJavaScript版:');
-      console.log(`   node scripts/extract-horse-from-html.js "${outputFile}"`);
+      console.log('1. データを抽出してJSON保存（DB不使用）:');
+      console.log(`   bun start extract-html-only "${outputFile}"`);
+      console.log('2. 抽出してDBにも登録:');
+      console.log(`   bun start extract-html "${outputFile}"`);
     } else {
       console.log('1. データは変数に格納されました');
       console.log('2. HorseDataExtractor.parseJRAHorseData() で解析可能です');
