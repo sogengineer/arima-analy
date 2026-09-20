@@ -8,7 +8,7 @@
  * - 調教師（8%）: 厩舎力の反映
  */
 
-import { SCORE_WEIGHTS } from '../../constants/ScoringConstants';
+import { SCORE_WEIGHTS } from '@/constants/ScoringConstants';
 
 /** 10要素のスコア構成 */
 export interface ScoreComponentsData {

@@ -5,9 +5,9 @@
 
 import type { Database } from 'bun:sqlite';
 import { sql } from 'kysely';
-import { queryBuilder, runStatement, selectRow } from '../../database/QueryRunner';
-import type { HorseImportData } from '../../types/HorseData';
-import type { HorseInsertResult } from '../../types/RepositoryTypes';
+import { queryBuilder, runStatement, selectRow } from '@/database/QueryRunner';
+import type { HorseImportData } from '@/types/HorseData';
+import type { HorseInsertResult } from '@/types/RepositoryTypes';
 
 /** 血統・関係者のID（未指定・未登録なら null） */
 interface RelatedIds {

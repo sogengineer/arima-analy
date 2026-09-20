@@ -5,9 +5,9 @@
  * 登録済みの馬の馬場状態別成績を分析する。
  */
 
-import { DatabaseConnection } from '../database/DatabaseConnection';
-import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
-import type { TrackStats } from '../types/RepositoryTypes';
+import { DatabaseConnection } from '@/database/DatabaseConnection';
+import { HorseQueryRepository } from '@/repositories/queries/HorseQueryRepository';
+import type { TrackStats } from '@/types/RepositoryTypes';
 
 export class AnalyzeTrack {
   private readonly connection: DatabaseConnection;

@@ -5,8 +5,8 @@
 
 import type { Database } from 'bun:sqlite';
 import { sql, type Selectable } from 'kysely';
-import { queryBuilder, selectRow, selectRows } from '../../database/QueryRunner';
-import type { RaceEntriesTable, RacesTable, VenuesTable } from '../../database/schema';
+import { queryBuilder, selectRow, selectRows } from '@/database/QueryRunner';
+import type { RaceEntriesTable, RacesTable, VenuesTable } from '@/database/schema';
 
 /** レース1行＋会場名（`races.*` に `venues.name` を足した形） */
 export type RaceWithVenueRow = Selectable<RacesTable> & { venue_name: string };

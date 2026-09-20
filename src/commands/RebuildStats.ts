@@ -8,9 +8,9 @@
  * DBに入っているデータだけで完結する処理で、外部取得は行わない。
  */
 
-import { DatabaseConnection } from '../database/DatabaseConnection';
-import { EntryOddsAggregateRepository } from '../repositories/aggregates/EntryOddsAggregateRepository';
-import { ScoreAggregateRepository } from '../repositories/aggregates/ScoreAggregateRepository';
+import { DatabaseConnection } from '@/database/DatabaseConnection';
+import { EntryOddsAggregateRepository } from '@/repositories/aggregates/EntryOddsAggregateRepository';
+import { ScoreAggregateRepository } from '@/repositories/aggregates/ScoreAggregateRepository';
 
 export class RebuildStats {
   constructor(private readonly dbPath?: string) {}

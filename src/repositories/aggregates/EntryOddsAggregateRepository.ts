@@ -4,7 +4,7 @@
 
 import type { Database } from 'bun:sqlite';
 import { sql } from 'kysely';
-import { queryBuilder, runStatement } from '../../database/QueryRunner';
+import { queryBuilder, runStatement } from '@/database/QueryRunner';
 
 /** 確定オッズと出走前オッズを「同じ値」とみなす許容差 */
 const ODDS_MATCH_TOLERANCE = 0.0001;

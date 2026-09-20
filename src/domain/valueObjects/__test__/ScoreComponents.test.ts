@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { ScoreComponents, type ScoreComponentsData } from '../ScoreComponents';
-import { SCORE_WEIGHTS } from '../../../constants/ScoringConstants';
+import { ScoreComponents, type ScoreComponentsData } from '@/domain/valueObjects/ScoreComponents';
+import { SCORE_WEIGHTS } from '@/constants/ScoringConstants';
 
 // ============================================
 // テストデータ生成ヘルパー

@@ -2,7 +2,7 @@
  * スコア値オブジェクト
  */
 
-import { SCORE_RANGES } from '../../constants/ScoringConstants';
+import { SCORE_RANGES } from '@/constants/ScoringConstants';
 
 export class Score {
   constructor(private readonly value: number) {

@@ -23,8 +23,8 @@ import {
   buildCalibrationTable,
   evaluateRaces,
   splitRacesIntoDateBlocks
-} from '../MachineLearningModel';
-import { FEATURE_NAMES, FEATURE_DIMENSION, toVector } from '../../features/FeatureBuilder';
+} from '@/models/MachineLearningModel';
+import { FEATURE_NAMES, FEATURE_DIMENSION, toVector } from '@/features/FeatureBuilder';
 
 /** 合計（加算は先頭から順に行う） */
 function sumOf(values: number[]): number {

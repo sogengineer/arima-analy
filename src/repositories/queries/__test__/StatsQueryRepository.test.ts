@@ -8,10 +8,10 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { createTestDb, type TestDatabase } from '../../../test/helpers/testDb';
-import { StatsQueryRepository } from '../StatsQueryRepository';
-import { ScoreAggregateRepository } from '../../aggregates/ScoreAggregateRepository';
-import type { ScoreUpdateData } from '../../../types/RepositoryTypes';
+import { createTestDb, type TestDatabase } from '@/test/helpers/testDb';
+import { StatsQueryRepository } from '@/repositories/queries/StatsQueryRepository';
+import { ScoreAggregateRepository } from '@/repositories/aggregates/ScoreAggregateRepository';
+import type { ScoreUpdateData } from '@/types/RepositoryTypes';
 
 let testDb: TestDatabase;
 let repository: StatsQueryRepository;

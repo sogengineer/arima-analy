@@ -23,7 +23,7 @@
 import {
   TRAINER_SCORE_WEIGHTS,
   getJockeyG1ReliabilityFactor  // 騎手と同じ信頼度補正を使用
-} from '../../constants/ScoringConstants';
+} from '@/constants/ScoringConstants';
 
 import { TrainerBuilder } from './TrainerBuilder';
 

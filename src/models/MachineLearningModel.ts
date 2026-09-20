@@ -20,14 +20,14 @@
  *   （docs/MODELS.md 参照）。
  */
 
-import { DatabaseConnection } from '../database/DatabaseConnection';
-import { RaceQueryRepository } from '../repositories/queries/RaceQueryRepository';
+import { DatabaseConnection } from '@/database/DatabaseConnection';
+import { RaceQueryRepository } from '@/repositories/queries/RaceQueryRepository';
 import {
   FeatureBuilder,
   FEATURE_NAMES,
   FEATURE_DIMENSION,
   type RaceFeatureSet
-} from '../features/FeatureBuilder';
+} from '@/features/FeatureBuilder';
 import type {
   AdoptionGate,
   LogisticModel,

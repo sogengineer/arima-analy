@@ -13,7 +13,7 @@ import {
   parseTrackCondition,
   stripTags,
   decodeEntities
-} from '../JRAPageParser';
+} from '@/utils/JRAPageParser';
 
 interface HeaderFixtureOptions {
   /** 「3回中山8日」相当の開催表記 */

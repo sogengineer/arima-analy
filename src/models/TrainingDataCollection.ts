@@ -2,8 +2,8 @@
  * 確定済みレースから学習サンプルを組む補助
  */
 
-import type { RaceQueryRepository } from '../repositories/queries/RaceQueryRepository';
-import type { RaceFeatureSet } from '../features/FeatureBuilder';
+import type { RaceQueryRepository } from '@/repositories/queries/RaceQueryRepository';
+import type { RaceFeatureSet } from '@/features/FeatureBuilder';
 import type { TrainingSample } from './MachineLearningTypes';
 
 /** 結果が確定しているレース行 */

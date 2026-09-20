@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn, jest } from 'bun:test';
 import { writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { Database } from 'bun:sqlite';
-import { createTestDb, type TestDatabase } from '../../test/helpers/testDb';
-import type { ExtractedRaceData, HorseData } from '../../types/HorseData';
-import { ImportData } from '../ImportData';
-import { RebuildStats } from '../RebuildStats';
+import { createTestDb, type TestDatabase } from '@/test/helpers/testDb';
+import type { ExtractedRaceData, HorseData } from '@/types/HorseData';
+import { ImportData } from '@/commands/ImportData';
+import { RebuildStats } from '@/commands/RebuildStats';
 
 /**
  * ImportData インポートテスト

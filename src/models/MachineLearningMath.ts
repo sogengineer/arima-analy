@@ -5,7 +5,7 @@
  * 学習そのものは `LogisticRegression`、評価は `RaceEvaluation` にある。
  */
 
-import { MARKET_FEATURE_INDICES, SMALL_MODEL_FEATURE_INDICES } from '../features/FeatureBuilder';
+import { MARKET_FEATURE_INDICES, SMALL_MODEL_FEATURE_INDICES } from '@/features/FeatureBuilder';
 import type { CalibrationBin } from './MachineLearningTypes';
 
 /** 配列の総和（加算は先頭から順に行う） */

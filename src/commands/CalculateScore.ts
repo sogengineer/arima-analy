@@ -1,7 +1,7 @@
-import { DatabaseConnection } from '../database/DatabaseConnection';
-import { ScoringOrchestrator } from '../domain/services/ScoringOrchestrator';
-import { ScoreAggregateRepository } from '../repositories/aggregates/ScoreAggregateRepository';
-import { SCORE_WEIGHTS } from '../constants/ScoringConstants';
+import { DatabaseConnection } from '@/database/DatabaseConnection';
+import { ScoringOrchestrator } from '@/domain/services/ScoringOrchestrator';
+import { ScoreAggregateRepository } from '@/repositories/aggregates/ScoreAggregateRepository';
+import { SCORE_WEIGHTS } from '@/constants/ScoringConstants';
 
 interface HorseScore {
   horseId: number;

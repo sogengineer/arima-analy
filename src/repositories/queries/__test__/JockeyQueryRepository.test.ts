@@ -10,8 +10,8 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { createTestDb, type TestDatabase } from '../../../test/helpers/testDb';
-import { JockeyQueryRepository } from '../JockeyQueryRepository';
+import { createTestDb, type TestDatabase } from '@/test/helpers/testDb';
+import { JockeyQueryRepository } from '@/repositories/queries/JockeyQueryRepository';
 
 /** 基準日。この日のレースは as-of の対象外になる（同日は除外） */
 const AS_OF = '2024-12-31';

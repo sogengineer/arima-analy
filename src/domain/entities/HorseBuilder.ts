@@ -5,7 +5,7 @@
  * `Horse.ts` から切り出したファイル。公開経路は `Horse.builder()`。
  */
 
-import type { HorseDetail, CourseStats, TrackStats } from '../../types/RepositoryTypes';
+import type { HorseDetail, CourseStats, TrackStats } from '@/types/RepositoryTypes';
 import type { RaceResult } from './RaceResult';
 import { Horse } from './Horse';
 

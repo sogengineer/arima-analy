@@ -10,9 +10,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { createTestDb, type TestDatabase } from '../../../test/helpers/testDb';
-import { HorseQueryRepository } from '../HorseQueryRepository';
-import { ScoreAggregateRepository } from '../../aggregates/ScoreAggregateRepository';
+import { createTestDb, type TestDatabase } from '@/test/helpers/testDb';
+import { HorseQueryRepository } from '@/repositories/queries/HorseQueryRepository';
+import { ScoreAggregateRepository } from '@/repositories/aggregates/ScoreAggregateRepository';
 
 /** 基準日。この日のレースは as-of の対象外になる（同日は除外） */
 const AS_OF = '2024-12-31';

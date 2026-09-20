@@ -12,14 +12,14 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import type { MLFeatures, TrainingRace, TrainingSample } from '../MachineLearningTypes';
-import { emptyRuleScores, FEATURE_DIMENSION } from '../../features/featureSpec';
+import type { MLFeatures, TrainingRace, TrainingSample } from '@/models/MachineLearningTypes';
+import { emptyRuleScores, FEATURE_DIMENSION } from '@/features/featureSpec';
 import {
   buildInnerFolds,
   DEFAULT_L2_CANDIDATES,
   tuneOnTrainWindow
-} from '../HyperparameterSelection';
-import { runWalkForwardValidation } from '../WalkForwardValidation';
+} from '@/models/HyperparameterSelection';
+import { runWalkForwardValidation } from '@/models/WalkForwardValidation';
 
 /** 指定フィールドの合計（加算は先頭から順に行う） */
 function sumBy<T>(items: T[], pick: (item: T) => number): number {

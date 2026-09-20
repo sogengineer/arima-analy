@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createTestDb, type TestDatabase } from '../../../test/helpers/testDb';
+import { createTestDb, type TestDatabase } from '@/test/helpers/testDb';
 
 describe('HorseAggregateRepository の馬レコード突合', () => {
   let testDb: TestDatabase;

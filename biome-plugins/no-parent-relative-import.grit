@@ -1,0 +1,64 @@
+language js
+
+// ディレクトリをまたぐ import はパスエイリアス `@/`（= src/）で書く。
+// `../` で親をたどる相対 import は、ファイルを移すたびに書き換えが要るうえ、
+// biome.json の層ごとの import 制限（`@/commands/**` などのパターン）に一致せず、
+// 制限が無言で素通りする。同一ディレクトリとその配下を指す `./` はそのまま使ってよい。
+or {
+  `import $_ from $src` as $d where {
+    $src <: r"['\"]\.\./.*['\"]",
+    register_diagnostic(
+      span = $d,
+      message = "ディレクトリをまたぐ import はパスエイリアス `@/` で書く（`../` で親をたどらない）。",
+      severity = "error"
+    )
+  },
+  `import $src` as $d where {
+    $src <: r"['\"]\.\./.*['\"]",
+    register_diagnostic(
+      span = $d,
+      message = "ディレクトリをまたぐ import はパスエイリアス `@/` で書く（`../` で親をたどらない）。",
+      severity = "error"
+    )
+  },
+  `export { $_ } from $src` as $d where {
+    $src <: r"['\"]\.\./.*['\"]",
+    register_diagnostic(
+      span = $d,
+      message = "ディレクトリをまたぐ再 export はパスエイリアス `@/` で書く（`../` で親をたどらない）。",
+      severity = "error"
+    )
+  },
+  `export type { $_ } from $src` as $d where {
+    $src <: r"['\"]\.\./.*['\"]",
+    register_diagnostic(
+      span = $d,
+      message = "ディレクトリをまたぐ再 export はパスエイリアス `@/` で書く（`../` で親をたどらない）。",
+      severity = "error"
+    )
+  },
+  `export * from $src` as $d where {
+    $src <: r"['\"]\.\./.*['\"]",
+    register_diagnostic(
+      span = $d,
+      message = "ディレクトリをまたぐ再 export はパスエイリアス `@/` で書く（`../` で親をたどらない）。",
+      severity = "error"
+    )
+  },
+  `export * as $_ from $src` as $d where {
+    $src <: r"['\"]\.\./.*['\"]",
+    register_diagnostic(
+      span = $d,
+      message = "ディレクトリをまたぐ再 export はパスエイリアス `@/` で書く（`../` で親をたどらない）。",
+      severity = "error"
+    )
+  },
+  `import($src)` as $d where {
+    $src <: r"['\"]\.\./.*['\"]",
+    register_diagnostic(
+      span = $d,
+      message = "ディレクトリをまたぐ動的 import はパスエイリアス `@/` で書く（`../` で親をたどらない）。",
+      severity = "error"
+    )
+  }
+}

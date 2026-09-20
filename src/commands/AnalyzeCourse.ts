@@ -6,9 +6,9 @@
  * 会場を指定しない場合は全会場の成績を表示する。
  */
 
-import { DatabaseConnection } from '../database/DatabaseConnection';
-import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
-import type { CourseStats, TrackStats } from '../types/RepositoryTypes';
+import { DatabaseConnection } from '@/database/DatabaseConnection';
+import { HorseQueryRepository } from '@/repositories/queries/HorseQueryRepository';
+import type { CourseStats, TrackStats } from '@/types/RepositoryTypes';
 
 interface AptitudeAnalysisResult {
   name: string;

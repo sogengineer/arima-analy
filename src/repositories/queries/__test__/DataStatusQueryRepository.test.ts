@@ -11,8 +11,8 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { createTestDb, type TestDatabase } from '../../../test/helpers/testDb';
-import { DataStatusQueryRepository } from '../DataStatusQueryRepository';
+import { createTestDb, type TestDatabase } from '@/test/helpers/testDb';
+import { DataStatusQueryRepository } from '@/repositories/queries/DataStatusQueryRepository';
 
 let testDb: TestDatabase;
 let repository: DataStatusQueryRepository;

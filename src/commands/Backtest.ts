@@ -28,11 +28,11 @@
  * 回収率が平均配当に化ける。揃うレースが0件なら **算出不能** と表示する。
  */
 
-import { DatabaseConnection } from '../database/DatabaseConnection';
-import { ScoringOrchestrator } from '../domain/services/ScoringOrchestrator';
-import { RaceQueryRepository } from '../repositories/queries/RaceQueryRepository';
-import { raceMarketProbabilities } from '../features/MarketProbability';
-import { MachineLearningModel } from '../models/MachineLearningModel';
+import { DatabaseConnection } from '@/database/DatabaseConnection';
+import { ScoringOrchestrator } from '@/domain/services/ScoringOrchestrator';
+import { RaceQueryRepository } from '@/repositories/queries/RaceQueryRepository';
+import { raceMarketProbabilities } from '@/features/MarketProbability';
+import { MachineLearningModel } from '@/models/MachineLearningModel';
 import * as ss from 'simple-statistics';
 import { calculateSummary } from './backtest/summary';
 import { displayRaceResult, displaySummary, suggestWeightImprovements } from './backtest/display';

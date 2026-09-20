@@ -1,11 +1,11 @@
-import { DatabaseConnection } from '../database/DatabaseConnection';
-import { HorseAggregateRepository } from '../repositories/aggregates/HorseAggregateRepository';
-import { RaceAggregateRepository } from '../repositories/aggregates/RaceAggregateRepository';
-import { ScoreAggregateRepository } from '../repositories/aggregates/ScoreAggregateRepository';
-import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
-import { StatsQueryRepository } from '../repositories/queries/StatsQueryRepository';
+import { DatabaseConnection } from '@/database/DatabaseConnection';
+import { HorseAggregateRepository } from '@/repositories/aggregates/HorseAggregateRepository';
+import { RaceAggregateRepository } from '@/repositories/aggregates/RaceAggregateRepository';
+import { ScoreAggregateRepository } from '@/repositories/aggregates/ScoreAggregateRepository';
+import { HorseQueryRepository } from '@/repositories/queries/HorseQueryRepository';
+import { StatsQueryRepository } from '@/repositories/queries/StatsQueryRepository';
 import { readFileSync } from 'node:fs';
-import type { ExtractedRaceData, HorseData } from '../types/HorseData';
+import type { ExtractedRaceData, HorseData } from '@/types/HorseData';
 import { runAutoBacktest, runAutoOptimizeWeights } from './importData/autoReports';
 import {
   calculateBirthYear,
@@ -245,7 +245,7 @@ export class ImportData {
     try {
       console.log(`🔍 HTMLファイルから馬データを抽出中: ${htmlFilePath}`);
 
-      const { HorseDataExtractor } = await import('../utils/HorseDataExtractor');
+      const { HorseDataExtractor } = await import('@/utils/HorseDataExtractor');
 
       const extractor = HorseDataExtractor.fromFile(htmlFilePath);
       const result = extractor.extractAll({
@@ -284,7 +284,7 @@ export class ImportData {
 
   async extractHorseDataStandalone(htmlFilePath: string, outputFormat: 'detailed' | 'summary' | 'csv' = 'detailed'): Promise<void> {
     try {
-      const { HorseDataExtractor } = await import('../utils/HorseDataExtractor');
+      const { HorseDataExtractor } = await import('@/utils/HorseDataExtractor');
 
       const extractor = HorseDataExtractor.fromFile(htmlFilePath);
       const result = extractor.extractAll({

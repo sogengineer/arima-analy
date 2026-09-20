@@ -4,8 +4,8 @@
 
 import type { Database } from 'bun:sqlite';
 import type { Selectable } from 'kysely';
-import { queryBuilder, selectRow, selectRows } from '../../database/QueryRunner';
-import type { BloodlineStatsTable, HorseScoresTable, SiresTable } from '../../database/schema';
+import { queryBuilder, selectRow, selectRows } from '@/database/QueryRunner';
+import type { BloodlineStatsTable, HorseScoresTable, SiresTable } from '@/database/schema';
 
 /** 血統統計に種牡馬名を添えた行 */
 export type BloodlineStatsWithSire = Selectable<BloodlineStatsTable> & { sire_name: string };

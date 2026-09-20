@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { Jockey } from '../Jockey';
-import type { JockeyVenueStats, JockeyOverallStats, JockeyTrainerComboStats } from '../../../types/RepositoryTypes';
+import { Jockey } from '@/domain/entities/Jockey';
+import type { JockeyVenueStats, JockeyOverallStats, JockeyTrainerComboStats } from '@/types/RepositoryTypes';
 
 // ============================================
 // テストデータ生成ヘルパー

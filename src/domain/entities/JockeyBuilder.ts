@@ -9,7 +9,7 @@ import type {
   JockeyVenueStats,
   JockeyOverallStats,
   JockeyTrainerComboStats
-} from '../../types/RepositoryTypes';
+} from '@/types/RepositoryTypes';
 import { Jockey } from './Jockey';
 
 /**

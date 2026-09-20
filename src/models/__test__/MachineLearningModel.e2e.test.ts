@@ -13,9 +13,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
-import { createTestDb, type TestDatabase } from '../../test/helpers/testDb';
-import { seedSyntheticRaces } from '../../test/helpers/syntheticRaces';
-import { MachineLearningModel, MIN_WALK_FORWARD_RACES } from '../MachineLearningModel';
+import { createTestDb, type TestDatabase } from '@/test/helpers/testDb';
+import { seedSyntheticRaces } from '@/test/helpers/syntheticRaces';
+import { MachineLearningModel, MIN_WALK_FORWARD_RACES } from '@/models/MachineLearningModel';
 
 /** 指定フィールドの合計（加算は先頭から順に行う） */
 function sumBy<T>(items: T[], pick: (item: T) => number): number {

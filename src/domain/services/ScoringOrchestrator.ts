@@ -19,18 +19,18 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { Horse } from '../entities/Horse';
-import { Jockey } from '../entities/Jockey';
-import { Race } from '../entities/Race';
-import { RaceResult } from '../entities/RaceResult';
-import type { ScoreComponents } from '../valueObjects/ScoreComponents';
-import { HorseQueryRepository } from '../../repositories/queries/HorseQueryRepository';
-import { RaceQueryRepository } from '../../repositories/queries/RaceQueryRepository';
-import { JockeyQueryRepository } from '../../repositories/queries/JockeyQueryRepository';
-import { calculateFrameNumber } from '../../constants/ScoringConstants';
-import type { HorseRaceResult, CourseStats, TrackStats } from '../../types/RepositoryTypes';
-import type { HorseDetailRow } from '../../repositories/queries/HorseQueryRepository';
-import type { EntryWithDetailsRow, RaceWithVenueRow } from '../../repositories/queries/RaceQueryRepository';
+import { Horse } from '@/domain/entities/Horse';
+import { Jockey } from '@/domain/entities/Jockey';
+import { Race } from '@/domain/entities/Race';
+import { RaceResult } from '@/domain/entities/RaceResult';
+import type { ScoreComponents } from '@/domain/valueObjects/ScoreComponents';
+import { HorseQueryRepository } from '@/repositories/queries/HorseQueryRepository';
+import { RaceQueryRepository } from '@/repositories/queries/RaceQueryRepository';
+import { JockeyQueryRepository } from '@/repositories/queries/JockeyQueryRepository';
+import { calculateFrameNumber } from '@/constants/ScoringConstants';
+import type { HorseRaceResult, CourseStats, TrackStats } from '@/types/RepositoryTypes';
+import type { HorseDetailRow } from '@/repositories/queries/HorseQueryRepository';
+import type { EntryWithDetailsRow, RaceWithVenueRow } from '@/repositories/queries/RaceQueryRepository';
 
 /**
  * 馬のスコア計算結果

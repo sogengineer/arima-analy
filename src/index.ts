@@ -119,9 +119,9 @@ program
     blocks?: number;
     minTrain?: number;
   }) => {
-    const { MachineLearningModel } = await import('./models/MachineLearningModel.js');
-    const { DatabaseConnection } = await import('./database/DatabaseConnection.js');
-    const { StatsQueryRepository } = await import('./repositories/queries/StatsQueryRepository.js');
+    const { MachineLearningModel } = await import('./models/MachineLearningModel');
+    const { DatabaseConnection } = await import('./database/DatabaseConnection');
+    const { StatsQueryRepository } = await import('./repositories/queries/StatsQueryRepository');
 
     const connection = new DatabaseConnection();
     const db = connection.getConnection();
@@ -281,7 +281,7 @@ program
   .argument('<url>', 'JRA URL')
   .option('-o, --output <file>', '出力ファイル', 'data/jra-page.html')
   .action(async (url: string, options: { output: string }) => {
-    const { JRAFetcher } = await import('./utils/JRAFetcher.js');
+    const { JRAFetcher } = await import('./utils/JRAFetcher');
     const result = await JRAFetcher.fetchAndSave(url, options.output);
     if (!result.success) {
       console.error('❌ 取得失敗:', result.error);
@@ -331,7 +331,7 @@ program
   .option('-l, --lambda <number>', '正則化パラメータ（デフォルト0.1）', parseFloat, 0.1)
   .option('-o, --output', '射影した重みをコード形式で出力')
   .action(async (options: { lambda: number; output?: boolean }) => {
-    const { MachineLearningModel } = await import('./models/MachineLearningModel.js');
+    const { MachineLearningModel } = await import('./models/MachineLearningModel');
     const ml = new MachineLearningModel();
 
     try {
@@ -352,7 +352,7 @@ program
   .command('data-status')
   .description('蓄積データの棚卸し（レース数・出走行数・結果件数・主要特徴量のnull率・期間）')
   .action(async () => {
-    const { DataStatus } = await import('./commands/DataStatus.js');
+    const { DataStatus } = await import('./commands/DataStatus');
     const command = new DataStatus();
     await command.execute();
   });

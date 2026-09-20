@@ -44,12 +44,12 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { ScoringOrchestrator } from '../domain/services/ScoringOrchestrator';
-import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
+import { ScoringOrchestrator } from '@/domain/services/ScoringOrchestrator';
+import { HorseQueryRepository } from '@/repositories/queries/HorseQueryRepository';
 import {
   RaceQueryRepository,
   type EntryWithDetailsRow
-} from '../repositories/queries/RaceQueryRepository';
+} from '@/repositories/queries/RaceQueryRepository';
 import {
   ASSIGNED_WEIGHT_BASE,
   HORSE_WEIGHT_BASE,

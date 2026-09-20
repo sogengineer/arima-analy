@@ -8,10 +8,10 @@
  * 取得（SQL）は行わない。
  */
 
-import type { EntryWithDetailsRow } from '../repositories/queries/RaceQueryRepository';
-import type { PreviousRaceRow } from '../repositories/queries/HorseQueryRepository';
-import type { ScoreComponents } from '../domain/valueObjects/ScoreComponents';
-import { MS_PER_DAY } from '../constants/DistanceConstants';
+import type { EntryWithDetailsRow } from '@/repositories/queries/RaceQueryRepository';
+import type { PreviousRaceRow } from '@/repositories/queries/HorseQueryRepository';
+import type { ScoreComponents } from '@/domain/valueObjects/ScoreComponents';
+import { MS_PER_DAY } from '@/constants/DistanceConstants';
 import type { MarketProbSource } from './MarketProbability';
 import {
   ASSIGNED_WEIGHT_BASE,

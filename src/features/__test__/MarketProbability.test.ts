@@ -9,7 +9,7 @@ import {
   popularityWinRate,
   raceMarketProbabilities,
   POPULARITY_WIN_RATES
-} from '../MarketProbability';
+} from '@/features/MarketProbability';
 
 /** 配列の総和（加算順は配列順のまま） */
 function sumOf(values: number[]): number {

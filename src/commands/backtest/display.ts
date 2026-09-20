@@ -5,7 +5,7 @@
  * Backtest から切り出した CLI 出力。集計済みの値を整形して出すだけ。
  */
 
-import { SCORE_WEIGHTS } from '../../constants/ScoringConstants';
+import { SCORE_WEIGHTS } from '@/constants/ScoringConstants';
 import { calculateElementContribution } from './summary';
 import type { BacktestResult, BacktestSummary } from './types';
 

@@ -8,8 +8,8 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { createTestDb, type TestDatabase } from '../../../test/helpers/testDb';
-import { EntryOddsAggregateRepository } from '../EntryOddsAggregateRepository';
+import { createTestDb, type TestDatabase } from '@/test/helpers/testDb';
+import { EntryOddsAggregateRepository } from '@/repositories/aggregates/EntryOddsAggregateRepository';
 
 let testDb: TestDatabase;
 let repository: EntryOddsAggregateRepository;

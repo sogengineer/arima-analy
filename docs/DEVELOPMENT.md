@@ -300,16 +300,34 @@ interface ScoreComponents {
 
 1. Node.js 標準モジュール・Bun組み込みモジュール
 2. サードパーティパッケージ
-3. 内部モジュール（相対パス）
+3. 内部モジュール（パスエイリアス `@/`）
+4. 同一ディレクトリ配下のモジュール（`./`）
 
 ```typescript
 import path from 'path';
 import { Database } from 'bun:sqlite';
 import type { Selectable } from 'kysely';
-import type { HorsesTable } from '../database/schema';
+import type { HorsesTable } from '@/database/schema';
+import { buildRaceRow } from './RaceRowWriters';
 ```
 
-相対 import に `.js` 拡張子は付けない（Biome プラグイン `no-js-import-extension` が検出する）。
+### インポートのパス表記
+
+ディレクトリをまたぐ内部モジュールの import はパスエイリアス `@/`（= `src/`）で書く。
+`../` で親をたどる相対 import は Biome プラグイン `no-parent-relative-import` が
+error で検出する（静的 import・再 export・動的 import が対象）。
+ファイルを移したときの書き換えが要らなくなるほか、層ごとの import 制限
+（`noRestrictedImports` の `@/commands/**` などのパターン）が確実に効く。
+
+同一ディレクトリとその配下を指す `./` はそのまま使ってよい（`./RaceRowWriters`,
+`./backtest/types`）。`bun:sqlite`・`node:*`・npm パッケージは対象外。
+
+エイリアスの定義は `tsconfig.json` の `compilerOptions.paths`（`@/*` → `./src/*`）
+1 つだけで、`baseUrl` は置いていない。tsgo の型チェック・Bun の実行時解決・
+`bun test` はいずれもこの設定を読む。
+
+内部モジュールの import に `.js` 拡張子は付けない（Biome プラグイン
+`no-js-import-extension` が `./` と `@/` の両方で検出する）。
 
 ### コメント
 

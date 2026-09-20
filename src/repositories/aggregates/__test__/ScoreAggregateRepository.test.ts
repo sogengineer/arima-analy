@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createTestDb, type TestDatabase } from '../../../test/helpers/testDb';
-import { ScoreAggregateRepository } from '../ScoreAggregateRepository';
-import type { ScoreUpdateData } from '../../../types/RepositoryTypes';
+import { createTestDb, type TestDatabase } from '@/test/helpers/testDb';
+import { ScoreAggregateRepository } from '@/repositories/aggregates/ScoreAggregateRepository';
+import type { ScoreUpdateData } from '@/types/RepositoryTypes';
 
 describe('ScoreAggregateRepository.rebuildHorseStats', () => {
   let testDb: TestDatabase;

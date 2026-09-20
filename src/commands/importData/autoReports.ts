@@ -6,8 +6,8 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { Backtest } from '../Backtest';
-import { MachineLearningModel } from '../../models/MachineLearningModel';
+import { Backtest } from '@/commands/Backtest';
+import { MachineLearningModel } from '@/models/MachineLearningModel';
 
 /**
  * インポート後の自動バックテスト

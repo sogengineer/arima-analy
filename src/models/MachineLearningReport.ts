@@ -17,7 +17,7 @@ import type {
 import {
   MARKET_FEATURE_NAMES,
   SMALL_MODEL_FEATURE_NAMES
-} from '../features/FeatureBuilder';
+} from '@/features/FeatureBuilder';
 
 /** 小モデルが市場系に足している特徴量の一覧（表示用） */
 const SMALL_MODEL_EXTRA_FEATURES = SMALL_MODEL_FEATURE_NAMES.filter(

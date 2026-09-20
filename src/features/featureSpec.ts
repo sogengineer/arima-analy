@@ -7,7 +7,7 @@
  * 公開経路は従来どおり `FeatureBuilder.ts` からの再エクスポート。
  */
 
-import type { ScoreComponentsData } from '../domain/valueObjects/ScoreComponents';
+import type { ScoreComponentsData } from '@/domain/valueObjects/ScoreComponents';
 import type { MarketProbSource } from './MarketProbability';
 
 /** 上がり3Fの基準タイム（秒）— 相対化の原点 */

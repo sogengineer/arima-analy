@@ -2,7 +2,7 @@
  * レース結果エンティティ
  */
 
-import type { HorseRaceResult } from '../../types/RepositoryTypes';
+import type { HorseRaceResult } from '@/types/RepositoryTypes';
 
 export class RaceResult {
   constructor(private readonly data: HorseRaceResult) {}

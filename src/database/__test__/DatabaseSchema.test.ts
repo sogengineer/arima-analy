@@ -17,8 +17,8 @@ import { Database } from 'bun:sqlite';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runMigrations } from '../migrations';
-import { TABLE_COLUMNS, TABLE_NAMES, VIEW_COLUMNS, VIEW_NAMES, type ColumnDescriptor } from '../schema';
+import { runMigrations } from '@/database/migrations';
+import { TABLE_COLUMNS, TABLE_NAMES, VIEW_COLUMNS, VIEW_NAMES, type ColumnDescriptor } from '@/database/schema';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

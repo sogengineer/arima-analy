@@ -4,18 +4,18 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { queryBuilder, runStatement, selectRow } from '../../database/QueryRunner';
+import { queryBuilder, runStatement, selectRow } from '@/database/QueryRunner';
 import type {
   RaceImportData,
   EntryImportData,
   ResultImportData
-} from '../../types/HorseData';
+} from '@/types/HorseData';
 import type {
   TransactionResult,
   RaceInsertResult,
   EntryInsertResult,
   BatchInsertResult
-} from '../../types/RepositoryTypes';
+} from '@/types/RepositoryTypes';
 import {
   updateRaceRow,
   insertRaceRow,

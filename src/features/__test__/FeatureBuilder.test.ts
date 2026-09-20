@@ -3,14 +3,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createTestDb, type TestDatabase } from '../../test/helpers/testDb';
-import { seedSyntheticRaces } from '../../test/helpers/syntheticRaces';
+import { createTestDb, type TestDatabase } from '@/test/helpers/testDb';
+import { seedSyntheticRaces } from '@/test/helpers/syntheticRaces';
 import {
   FeatureBuilder,
   FEATURE_DIMENSION,
   FEATURE_NAMES,
   marketImpliedProbabilities
-} from '../FeatureBuilder';
+} from '@/features/FeatureBuilder';
 
 /** 配列の総和（加算順は配列順のまま） */
 function sumOf(values: number[]): number {

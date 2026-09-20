@@ -5,9 +5,9 @@
  * 登録済みの馬の過去戦績を分析し、成績サマリーと馬場適性を表示する。
  */
 
-import { DatabaseConnection } from '../database/DatabaseConnection';
-import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
-import type { HorseRaceResult, TrackStats } from '../types/RepositoryTypes';
+import { DatabaseConnection } from '@/database/DatabaseConnection';
+import { HorseQueryRepository } from '@/repositories/queries/HorseQueryRepository';
+import type { HorseRaceResult, TrackStats } from '@/types/RepositoryTypes';
 
 export class AnalyzePerformance {
   private readonly connection: DatabaseConnection;

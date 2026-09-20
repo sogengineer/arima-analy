@@ -6,8 +6,8 @@
  * `MachineLearningModel` の再エクスポートで従来どおり。
  */
 
-import type { MLFeatures } from '../features/FeatureBuilder';
-import type { MarketProbSource } from '../features/MarketProbability';
+import type { MLFeatures } from '@/features/FeatureBuilder';
+import type { MarketProbSource } from '@/features/MarketProbability';
 
 export type { MLFeatures };
 

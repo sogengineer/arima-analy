@@ -7,11 +7,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createTestDb, type TestDatabase } from '../../../test/helpers/testDb';
-import { seedSyntheticRaces } from '../../../test/helpers/syntheticRaces';
-import { ScoringOrchestrator } from '../ScoringOrchestrator';
-import { FeatureBuilder } from '../../../features/FeatureBuilder';
-import { HorseQueryRepository } from '../../../repositories/queries/HorseQueryRepository';
+import { createTestDb, type TestDatabase } from '@/test/helpers/testDb';
+import { seedSyntheticRaces } from '@/test/helpers/syntheticRaces';
+import { ScoringOrchestrator } from '@/domain/services/ScoringOrchestrator';
+import { FeatureBuilder } from '@/features/FeatureBuilder';
+import { HorseQueryRepository } from '@/repositories/queries/HorseQueryRepository';
 
 /** 配列の総和（加算順は配列順のまま） */
 function sumOf(values: number[]): number {

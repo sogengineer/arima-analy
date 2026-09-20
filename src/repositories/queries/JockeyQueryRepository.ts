@@ -4,13 +4,13 @@
 
 import type { Database } from 'bun:sqlite';
 import type { Selectable } from 'kysely';
-import { queryBuilder, selectRow, selectRows } from '../../database/QueryRunner';
-import type { JockeysTable, TrainersTable } from '../../database/schema';
+import { queryBuilder, selectRow, selectRows } from '@/database/QueryRunner';
+import type { JockeysTable, TrainersTable } from '@/database/schema';
 import type {
   JockeyVenueStats,
   JockeyOverallStats,
   JockeyTrainerComboStats
-} from '../../types/RepositoryTypes';
+} from '@/types/RepositoryTypes';
 
 /**
  * 成績集計の共通条件

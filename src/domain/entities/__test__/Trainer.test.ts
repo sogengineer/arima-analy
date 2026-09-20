@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { Trainer } from '../Trainer';
+import { Trainer } from '@/domain/entities/Trainer';
 
 // ============================================
 // calculateScore テスト

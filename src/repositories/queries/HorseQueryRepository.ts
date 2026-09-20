@@ -9,17 +9,17 @@
 
 import type { Database } from 'bun:sqlite';
 import { sql, type NotNull, type Selectable } from 'kysely';
-import { queryBuilder, selectRow, selectRows } from '../../database/QueryRunner';
-import type { HorseDetailsView, HorsesTable } from '../../database/schema';
+import { queryBuilder, selectRow, selectRows } from '@/database/QueryRunner';
+import type { HorseDetailsView, HorsesTable } from '@/database/schema';
 import type {
   HorseRaceResult,
   CourseStats,
   TrackStats
-} from '../../types/RepositoryTypes';
+} from '@/types/RepositoryTypes';
 import {
   DISTANCE_CATEGORY_THRESHOLDS,
   getDistanceCategory
-} from '../../constants/DistanceConstants';
+} from '@/constants/DistanceConstants';
 
 /** 馬詳細ビュー（`v_horse_details`）の 1 行 */
 export type HorseDetailRow = Selectable<HorseDetailsView>;

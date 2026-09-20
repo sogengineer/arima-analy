@@ -10,8 +10,8 @@ import type {
   ExtractedRaceData,
   ExtractionOptions,
   ExtractionResult
-} from '../types/HorseData';
-import { calculateFrameNumber } from '../constants/ScoringConstants';
+} from '@/types/HorseData';
+import { calculateFrameNumber } from '@/constants/ScoringConstants';
 import { parseRaceHeader, parseCourseType } from './JRAPageParser';
 import { normalizeSex, parsePreviousRaces } from './HorseDataFields';
 import { formatExtractedRaceData } from './HorseDataFormatter';
