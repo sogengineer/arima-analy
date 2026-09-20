@@ -22,6 +22,7 @@ import type {
  * - `beforeDate` を指定した場合はさらに、**指定日より前**のレースだけを対象にする
  *   （同日は含めない。未来のレース＝リーク源を除外する）。条件はビルダーの再代入で足し、
  *   値は Kysely がバインドパラメータとして渡すので、SQL 本文に日付が混ざることはない。
+ *   判定は truthy（`if (beforeDate)`）で、空文字は旧実装互換で as-of なし扱い。不正な基準日として弾くのは別件。
  * - `SUM(CASE ...)` は対象行が 0 件のとき SQLite の仕様で NULL を返す（COUNT の 0 と揃わない）。
  *   既存の呼び出し側がこの戻り方に依存しているため、型上は `number` のまま変えていない。
  */
@@ -51,7 +52,7 @@ function jockeyVenueStatsQuery(jockeyId: number, venueName: string, beforeDate?:
     .where('venues.name', '=', venueName)
     .where('race_results.finish_position', 'is not', null);
 
-  if (beforeDate !== undefined) {
+  if (beforeDate) {
     query = query.where('races.race_date', '<', beforeDate);
   }
 
@@ -75,7 +76,7 @@ function jockeyVenueG1StatsQuery(jockeyId: number, venueName: string, beforeDate
     .where(eb => eb.or([eb('races.race_class', 'like', '%G1%'), eb('races.race_class', 'like', '%GI%')]))
     .where('race_results.finish_position', 'is not', null);
 
-  if (beforeDate !== undefined) {
+  if (beforeDate) {
     query = query.where('races.race_date', '<', beforeDate);
   }
 
@@ -102,7 +103,7 @@ function jockeyOverallStatsQuery(jockeyId: number, beforeDate?: string) {
     .where('race_entries.jockey_id', '=', jockeyId)
     .where('race_results.finish_position', 'is not', null);
 
-  if (beforeDate !== undefined) {
+  if (beforeDate) {
     query = query.where('races.race_date', '<', beforeDate);
   }
 
@@ -124,7 +125,7 @@ function jockeyOverallG1StatsQuery(jockeyId: number, beforeDate?: string) {
     .where(eb => eb.or([eb('races.race_class', 'like', '%G1%'), eb('races.race_class', 'like', '%GI%')]))
     .where('race_results.finish_position', 'is not', null);
 
-  if (beforeDate !== undefined) {
+  if (beforeDate) {
     query = query.where('races.race_date', '<', beforeDate);
   }
 
@@ -153,7 +154,7 @@ function jockeyTrainerStatsQuery(jockeyId: number, trainerId: number, beforeDate
     .where('horses.trainer_id', '=', trainerId)
     .where('race_results.finish_position', 'is not', null);
 
-  if (beforeDate !== undefined) {
+  if (beforeDate) {
     query = query.where('races.race_date', '<', beforeDate);
   }
 

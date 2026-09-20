@@ -7,6 +7,11 @@
  */
 
 import { DatabaseConnection } from '../database/DatabaseConnection';
+import {
+  DataStatusQueryRepository,
+  type MonitoredColumn,
+  type MonitoredTable
+} from '../repositories/queries/DataStatusQueryRepository';
 
 /** MLが成立する最低ライン（設計書「1. データ量の実態」） */
 const MIN_ROWS_FOR_ML = 3000;
@@ -24,13 +29,26 @@ interface Totals {
   lastDate?: string;
 }
 
-interface NullRate {
+/**
+ * null率を監視する列の 1 件
+ *
+ * @remarks
+ * テーブルと列名を組で持つ（`table` ごとに実在する列名しか書けない）。
+ * テーブルの union をそのまま展開したユニオンにしておくことで、
+ * `races` に `horse_weight` のような別テーブルの列を書くとコンパイルエラーになる。
+ */
+type NullRateOf<TTable extends MonitoredTable> = {
   label: string;
-  table: 'race_entries' | 'race_results' | 'races';
-  column: string;
+  table: TTable;
+  column: MonitoredColumn<TTable>;
   /** null率が高くても異常ではない列に付ける注記 */
   note?: string;
-}
+};
+
+type NullRate =
+  | NullRateOf<'race_entries'>
+  | NullRateOf<'race_results'>
+  | NullRateOf<'races'>;
 
 /** ML設計で一次特徴量として使う列（null率を監視する対象） */
 const MONITORED_COLUMNS: readonly NullRate[] = [
@@ -60,9 +78,11 @@ const MONITORED_COLUMNS: readonly NullRate[] = [
 
 export class DataStatus {
   private readonly connection: DatabaseConnection;
+  private readonly repository: DataStatusQueryRepository;
 
   constructor(dbPath?: string) {
     this.connection = dbPath ? new DatabaseConnection(dbPath) : new DatabaseConnection();
+    this.repository = new DataStatusQueryRepository(this.connection.getConnection());
   }
 
   async execute(): Promise<void> {
@@ -87,7 +107,7 @@ export class DataStatus {
       const width = Math.max(...MONITORED_COLUMNS.map(c => visualWidth(c.label))) + 2;
       for (const target of MONITORED_COLUMNS) {
         const denominator = denominatorFor(target.table, totals);
-        const nulls = this.countNulls(target.table, target.column);
+        const nulls = this.countNulls(target);
         const rate = denominator > 0 ? nulls / denominator : 1;
         console.log(`  ${marker(rate, target.note)} ${pad(target.label, width)}${percent(rate).padStart(7)}  (${nulls.toLocaleString()} / ${denominator.toLocaleString()})`);
         if (target.note && rate > 0) {
@@ -105,67 +125,37 @@ export class DataStatus {
   }
 
   private loadTotals(): Totals {
-    const db = this.connection.getConnection();
-    const one = <T>(sql: string): T => db.prepare(sql).get() as T;
+    const counts = this.repository.getTotals();
+    const period = this.repository.getRaceDatePeriod();
 
-    const counts = one<{
-      races: number; entries: number; results: number;
-      horses: number; jockeys: number; venues: number;
-    }>(`
-      SELECT
-        (SELECT COUNT(*) FROM races) AS races,
-        (SELECT COUNT(*) FROM race_entries) AS entries,
-        (SELECT COUNT(*) FROM race_results WHERE finish_position IS NOT NULL) AS results,
-        (SELECT COUNT(*) FROM horses) AS horses,
-        (SELECT COUNT(*) FROM jockeys) AS jockeys,
-        (SELECT COUNT(DISTINCT venue_id) FROM races) AS venues
-    `);
-
-    const period = one<{ first_date?: string; last_date?: string }>(
-      'SELECT MIN(race_date) AS first_date, MAX(race_date) AS last_date FROM races'
-    );
-
-    return { ...counts, firstDate: period.first_date, lastDate: period.last_date };
+    return {
+      ...counts,
+      firstDate: period.first_date ?? undefined,
+      lastDate: period.last_date ?? undefined
+    };
   }
 
   /**
    * 指定列のNULL件数を数える
    *
    * @remarks
-   * テーブル名・列名はSQLのプレースホルダにできない。
-   * 引数は `MONITORED_COLUMNS` の固定リスト由来のみで、外部入力は流れ込まない。
+   * `table` と `column` は組のまま渡す（リポジトリ側がテーブルごとの列名に型で絞っている）。
    */
-  private countNulls(table: NullRate['table'], column: string): number {
-    const db = this.connection.getConnection();
-    const sql = table === 'race_results'
-      ? `SELECT COUNT(*) AS c FROM race_results WHERE finish_position IS NOT NULL AND ${column} IS NULL`
-      : `SELECT COUNT(*) AS c FROM ${table} WHERE ${column} IS NULL`;
-    return (db.prepare(sql).get() as { c: number }).c;
+  private countNulls(target: NullRate): number {
+    return this.repository.countNullValues(target);
   }
 
   /** 芝ダ別・クラス別の内訳（一般レースが入っているかの確認用） */
   private printRaceBreakdown(): void {
-    const db = this.connection.getConnection();
-
-    const byType = db.prepare(`
-      SELECT COALESCE(race_type, '(未設定)') AS label, COUNT(*) AS count
-      FROM races GROUP BY race_type ORDER BY count DESC
-    `).all() as Array<{ label: string; count: number }>;
-
-    const byGrade = db.prepare(`
-      SELECT COALESCE(grade, '(平場・特別)') AS label, COUNT(*) AS count
-      FROM races GROUP BY grade ORDER BY count DESC
-    `).all() as Array<{ label: string; count: number }>;
-
-    const byDistance = db.prepare(`
-      SELECT COUNT(DISTINCT distance) AS c FROM races
-    `).get() as { c: number };
+    const byType = this.repository.countRacesByType();
+    const byGrade = this.repository.countRacesByGrade();
+    const distanceKinds = this.repository.countDistinctDistances();
 
     if (byType.length > 0) {
       console.log('\n── レース内訳 ──');
       console.log(`  芝ダ別:   ${byType.map(r => `${r.label} ${r.count}`).join(' / ')}`);
       console.log(`  格付別:   ${byGrade.map(r => `${r.label} ${r.count}`).join(' / ')}`);
-      console.log(`  距離種類: ${byDistance.c}種`);
+      console.log(`  距離種類: ${distanceKinds}種`);
     }
   }
 

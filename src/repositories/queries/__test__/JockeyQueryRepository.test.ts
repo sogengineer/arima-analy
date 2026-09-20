@@ -120,6 +120,13 @@ describe('JockeyQueryRepository.getJockeyVenueStats', () => {
     });
   });
 
+  it('空文字の as-of は as-of なしと同じ結果になる', () => {
+    // 空文字は旧実装互換で as-of なし扱い。不正な基準日として弾くのは別件
+    expect(repository.getJockeyVenueStats(jockeyId, '中山', '')).toEqual(
+      repository.getJockeyVenueStats(jockeyId, '中山')
+    );
+  });
+
   it('出走の無い会場では COUNT は 0、SUM は NULL のまま返す', () => {
     // SQLite の SUM は対象行が 0 件だと NULL を返す（COUNT の 0 と揃わない）。
     // G1 側だけ `?? 0` を通るので 0 になる、という既存の非対称をそのまま固定する。
@@ -202,6 +209,18 @@ describe('JockeyQueryRepository.getJockeyTrainerStats', () => {
       places: 0,
       shows: 0
     });
+  });
+});
+
+describe('JockeyQueryRepository の as-of に空文字を渡した場合', () => {
+  it('全体成績・コンビ成績も as-of なしと同じ結果になる', () => {
+    // 空文字は旧実装互換で as-of なし扱い。不正な基準日として弾くのは別件
+    expect(repository.getJockeyOverallStats(jockeyId, '')).toEqual(
+      repository.getJockeyOverallStats(jockeyId)
+    );
+    expect(repository.getJockeyTrainerStats(jockeyId, trainerAId, '')).toEqual(
+      repository.getJockeyTrainerStats(jockeyId, trainerAId)
+    );
   });
 });
 

@@ -46,13 +46,15 @@
 import type { Database } from 'bun:sqlite';
 import { ScoringOrchestrator } from '../domain/services/ScoringOrchestrator';
 import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
-import { RaceQueryRepository } from '../repositories/queries/RaceQueryRepository';
+import {
+  RaceQueryRepository,
+  type EntryWithDetailsRow
+} from '../repositories/queries/RaceQueryRepository';
 import {
   ASSIGNED_WEIGHT_BASE,
   HORSE_WEIGHT_BASE,
   type RaceFeatureSet
 } from './featureSpec';
-import type { EntryWithDetails } from '../types/RepositoryTypes';
 import { mean, stdDev, zScores, normalizedRanks } from './featureMath';
 import {
   hasCompleteOdds,
@@ -90,7 +92,7 @@ export class FeatureBuilder {
   private readonly horseRepo: HorseQueryRepository;
   private readonly raceRepo: RaceQueryRepository;
 
-  constructor(private readonly db: Database) {
+  constructor(db: Database) {
     this.orchestrator = new ScoringOrchestrator(db);
     this.horseRepo = new HorseQueryRepository(db);
     this.raceRepo = new RaceQueryRepository(db);
@@ -111,7 +113,7 @@ export class FeatureBuilder {
     if (entries.length === 0) return null;
 
     const cutoff = asOf ?? race.race_date;
-    const context = this.buildRaceContext(raceId, entries, race.total_horses, cutoff);
+    const context = this.buildRaceContext(raceId, entries, race.total_horses ?? undefined, cutoff);
 
     return {
       raceId,
@@ -134,7 +136,7 @@ export class FeatureBuilder {
    */
   private buildRaceContext(
     raceId: number,
-    entries: EntryWithDetails[],
+    entries: EntryWithDetailsRow[],
     totalHorses: number | undefined,
     cutoff: string
   ): RaceFeatureContext {
@@ -201,13 +203,13 @@ export class FeatureBuilder {
    * バックテストの回収率シミュレーションでのみ使用する。
    */
   private getPayoutOdds(raceId: number): Map<number, number> {
-    const rows = this.db.prepare(`
-      SELECT e.horse_id, rr.final_win_odds
-      FROM race_entries e
-      JOIN race_results rr ON rr.entry_id = e.id
-      WHERE e.race_id = ? AND rr.final_win_odds IS NOT NULL
-    `).all(raceId) as { horse_id: number; final_win_odds: number }[];
-
-    return new Map(rows.map(r => [r.horse_id, r.final_win_odds]));
+    const odds = new Map<number, number>();
+    for (const row of this.raceRepo.getRacePayoutOdds(raceId)) {
+      // クエリ側で NULL を除いているが、列の型が nullable なのでここでも絞り込む
+      if (row.final_win_odds !== null) {
+        odds.set(row.horse_id, row.final_win_odds);
+      }
+    }
+    return odds;
   }
 }

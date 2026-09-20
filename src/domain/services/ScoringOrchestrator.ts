@@ -28,7 +28,9 @@ import { HorseQueryRepository } from '../../repositories/queries/HorseQueryRepos
 import { RaceQueryRepository } from '../../repositories/queries/RaceQueryRepository';
 import { JockeyQueryRepository } from '../../repositories/queries/JockeyQueryRepository';
 import { calculateFrameNumber } from '../../constants/ScoringConstants';
-import type { EntryWithDetails, RaceWithVenue, HorseDetail, HorseRaceResult, CourseStats, TrackStats } from '../../types/RepositoryTypes';
+import type { HorseRaceResult, CourseStats, TrackStats } from '../../types/RepositoryTypes';
+import type { HorseDetailRow } from '../../repositories/queries/HorseQueryRepository';
+import type { EntryWithDetailsRow, RaceWithVenueRow } from '../../repositories/queries/RaceQueryRepository';
 
 /**
  * 馬のスコア計算結果
@@ -46,7 +48,7 @@ export interface HorseScoreResult {
 
 /** レース単位でまとめ取りした馬データのキャッシュ（horseId → 各種データ） */
 interface RaceHorseDataCache {
-  detailsMap: Map<number, HorseDetail>;
+  detailsMap: Map<number, HorseDetailRow>;
   resultsMap: Map<number, HorseRaceResult[]>;
   courseStatsMap: Map<number, CourseStats[]>;
   trackStatsMap: Map<number, TrackStats[]>;
@@ -123,7 +125,7 @@ export class ScoringOrchestrator {
       });
 
       const jockey = entry.jockey_id
-        ? this.buildJockeyEntity(entry.jockey_id, race.venue, entry.trainer_id, cutoff)
+        ? this.buildJockeyEntity(entry.jockey_id, race.venue, entry.trainer_id ?? undefined, cutoff)
         : null;
 
       // TODO: Trainerエンティティの構築は将来実装
@@ -141,7 +143,7 @@ export class ScoringOrchestrator {
         race,
         null,  // trainer（将来実装）
         framePosition,   // 枠番
-        entry.trainer_id // 騎手×調教師コンビ成績の参照用
+        entry.trainer_id ?? undefined // 騎手×調教師コンビ成績の参照用
       );
 
       results.push({
@@ -162,11 +164,11 @@ export class ScoringOrchestrator {
    * @param race - レースエンティティ
    * @returns スコア構成要素
    */
-  calculateScoreForEntry(entry: EntryWithDetails, race: Race, asOf?: string): ScoreComponents {
+  calculateScoreForEntry(entry: EntryWithDetailsRow, race: Race, asOf?: string): ScoreComponents {
     const cutoff = asOf ?? race.date;
     const horse = this.buildHorseEntity(entry.horse_id, cutoff);
     const jockey = entry.jockey_id
-      ? this.buildJockeyEntity(entry.jockey_id, race.venue, entry.trainer_id, cutoff)
+      ? this.buildJockeyEntity(entry.jockey_id, race.venue, entry.trainer_id ?? undefined, cutoff)
       : null;
 
     const framePosition = entry.frame_number
@@ -181,7 +183,7 @@ export class ScoringOrchestrator {
       race,
       null,  // trainer（将来実装）
       framePosition,      // 枠番
-      entry.trainer_id     // 騎手×調教師コンビ成績の参照用
+      entry.trainer_id ?? undefined     // 騎手×調教師コンビ成績の参照用
     );
   }
 
@@ -312,9 +314,9 @@ export class ScoringOrchestrator {
    * レース情報を取得
    *
    * @param raceId - レースID
-   * @returns レース情報、見つからない場合は undefined
+   * @returns レース情報、見つからない場合は null
    */
-  getRaceWithVenue(raceId: number): RaceWithVenue | undefined {
+  getRaceWithVenue(raceId: number): RaceWithVenueRow | null {
     return this.raceRepo.getRaceWithVenue(raceId);
   }
 
@@ -323,7 +325,7 @@ export class ScoringOrchestrator {
    *
    * @returns 全レースの配列
    */
-  getAllRaces(): RaceWithVenue[] {
+  getAllRaces(): RaceWithVenueRow[] {
     return this.raceRepo.getAllRaces();
   }
 
@@ -331,11 +333,11 @@ export class ScoringOrchestrator {
    * レースをIDまたは名前で取得
    *
    * @param idOrName - レースIDまたはレース名
-   * @returns レース情報、見つからない場合は undefined
+   * @returns レース情報、見つからない場合は null
    */
-  getRaceByIdOrName(idOrName: string): RaceWithVenue | undefined {
+  getRaceByIdOrName(idOrName: string): RaceWithVenueRow | null {
     const race = this.raceRepo.getRaceByIdOrName(idOrName);
-    if (!race) return undefined;
+    if (!race) return null;
     return this.raceRepo.getRaceWithVenue(race.id);
   }
 
@@ -345,7 +347,7 @@ export class ScoringOrchestrator {
    * @param raceId - レースID
    * @returns 出走馬エントリの配列
    */
-  getRaceEntries(raceId: number): EntryWithDetails[] {
+  getRaceEntries(raceId: number): EntryWithDetailsRow[] {
     return this.raceRepo.getRaceEntries(raceId);
   }
 }

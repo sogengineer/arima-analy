@@ -229,7 +229,7 @@ export class Backtest {
 
       // 市場データ（事前オッズ・人気）と払戻用の確定オッズ
       // 全馬にオッズが揃っているレースのみオッズを使い、それ以外は人気順位から算出する
-      const market = this.getMarketData(raceId);
+      const market = this.raceRepo.getRaceMarketData(raceId);
       const impliedByHorse = new Map<number, number>();
       const marketProbs = raceMarketProbabilities(
         market.map(m => m.win_odds ?? null),
@@ -347,33 +347,5 @@ export class Backtest {
     } catch {
       return 0;
     }
-  }
-
-  /**
-   * 市場データ（事前オッズ・人気順位・確定オッズ）を取得
-   *
-   * @remarks
-   * `win_odds` は結果ページからは取れないため大半のレースで NULL になる。
-   * 暗黙確率の算出では全馬に揃っている場合のみ使い、
-   * それ以外は全馬ぶん取得できる `popularity` を使う。
-   */
-  private getMarketData(raceId: number): {
-    horse_id: number;
-    win_odds: number | null;
-    popularity: number | null;
-    final_win_odds: number | null;
-  }[] {
-    return this.db.prepare(`
-      SELECT e.horse_id, e.win_odds, e.popularity, rr.final_win_odds
-      FROM race_entries e
-      LEFT JOIN race_results rr ON rr.entry_id = e.id
-      WHERE e.race_id = ?
-      ORDER BY e.horse_number
-    `).all(raceId) as {
-      horse_id: number;
-      win_odds: number | null;
-      popularity: number | null;
-      final_win_odds: number | null;
-    }[];
   }
 }

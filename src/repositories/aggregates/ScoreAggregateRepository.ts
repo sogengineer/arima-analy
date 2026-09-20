@@ -7,15 +7,24 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { queryBuilder, runStatement, selectRows } from '../../database/QueryRunner';
 import type { ScoreUpdateData } from '../../types/RepositoryTypes';
 import { getDistanceCategory } from '../../constants/DistanceConstants';
 
-/** 統計更新の対象となるコース条件（会場・芝ダ・距離カテゴリ・馬場状態） */
-export interface RaceCourseContext {
-  venueId: number;
-  raceType: string;
-  distanceCategory: string;
-  trackCondition: string;
+/** 集計表の勝敗カウント（1着 / 2着 / 3着をそれぞれ 1 か 0 で表す） */
+interface FinishCounts {
+  wins: number;
+  places: number;
+  shows: number;
+}
+
+/** 着順を集計表の加算値に落とす */
+function toFinishCounts(finishPosition: number): FinishCounts {
+  return {
+    wins: finishPosition === 1 ? 1 : 0,
+    places: finishPosition === 2 ? 1 : 0,
+    shows: finishPosition === 3 ? 1 : 0
+  };
 }
 
 export class ScoreAggregateRepository {
@@ -28,24 +37,27 @@ export class ScoreAggregateRepository {
    */
   rebuildHorseStats(): number {
     return this.db.transaction(() => {
-      const results = this.db.prepare(`
-        SELECT re.horse_id, r.venue_id, r.race_type, r.distance,
-               r.track_condition, rr.finish_position
-        FROM race_results rr
-        JOIN race_entries re ON re.id = rr.entry_id
-        JOIN races r ON r.id = re.race_id
-        WHERE rr.finish_position > 0
-      `).all() as {
-        horse_id: number;
-        venue_id: number;
-        race_type: string | null;
-        distance: number;
-        track_condition: string | null;
-        finish_position: number;
-      }[];
+      const results = selectRows(
+        this.db,
+        queryBuilder
+          .selectFrom('race_results as rr')
+          .innerJoin('race_entries as re', 're.id', 'rr.entry_id')
+          .innerJoin('races as r', 'r.id', 're.race_id')
+          .select(eb => [
+            're.horse_id',
+            'r.venue_id',
+            'r.race_type',
+            'r.distance',
+            'r.track_condition',
+            // 着順は下の where で 0 より大きい行だけに絞っているので NULL は来ない
+            eb.ref('rr.finish_position').$notNull().as('finish_position')
+          ])
+          .where('rr.finish_position', '>', 0)
+          .compile()
+      );
 
-      this.db.exec('DELETE FROM horse_track_stats');
-      this.db.exec('DELETE FROM horse_course_stats');
+      runStatement(this.db, queryBuilder.deleteFrom('horse_track_stats').compile());
+      runStatement(this.db, queryBuilder.deleteFrom('horse_course_stats').compile());
       for (const result of results) {
         this.updateHorseTrackStats(
           result.horse_id, result.race_type ?? 'ダート',
@@ -62,74 +74,80 @@ export class ScoreAggregateRepository {
 
   /**
    * 馬スコアを更新（10要素構成 + total_score）
+   *
+   * @remarks
+   * 同じ（馬, レース）の組が既にあれば UPDATE する。各要素は `COALESCE(新しい値, 既存値)` なので、
+   * 値が渡されなかった要素は既存のスコアを残す。
+   *
+   * 各要素に付けた `?? null` は型の上では不要に見えるが、実行時に `undefined` が入った
+   * `ScoreUpdateData` が渡される経路があるため必要になる。
+   * - `doUpdateSet` 側: `undefined` のままだとバインド値に載り `QueryRunner` が例外にする。
+   *   `null` にすることで `COALESCE(NULL, 既存値)` となり、既存値が保たれる。
+   * - `values()` 側: Kysely は `undefined` の列を INSERT 文から**省く**ため、
+   *   DEFAULT 0 を持つスコア列では「0 が入る」ことになり、NULL を入れる挙動と結果が変わる。
    */
   updateHorseScore(
     horseId: number,
     raceId: number | null,
     scores: ScoreUpdateData
   ): void {
-    this.db.prepare(`
-      INSERT INTO horse_scores (
-        horse_id, race_id,
-        recent_performance_score, course_aptitude_score, distance_aptitude_score,
-        last_3f_ability_score, g1_achievement_score, rotation_score,
-        track_condition_score, jockey_score, trainer_score, post_position_score,
-        total_score
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(horse_id, race_id) DO UPDATE SET
-        recent_performance_score = COALESCE(?, recent_performance_score),
-        course_aptitude_score = COALESCE(?, course_aptitude_score),
-        distance_aptitude_score = COALESCE(?, distance_aptitude_score),
-        last_3f_ability_score = COALESCE(?, last_3f_ability_score),
-        g1_achievement_score = COALESCE(?, g1_achievement_score),
-        rotation_score = COALESCE(?, rotation_score),
-        track_condition_score = COALESCE(?, track_condition_score),
-        jockey_score = COALESCE(?, jockey_score),
-        trainer_score = COALESCE(?, trainer_score),
-        post_position_score = COALESCE(?, post_position_score),
-        total_score = COALESCE(?, total_score)
-    `).run(
-      horseId, raceId,
-      scores.recent_performance_score, scores.course_aptitude_score,
-      scores.distance_aptitude_score, scores.last_3f_ability_score,
-      scores.g1_achievement_score, scores.rotation_score,
-      scores.track_condition_score, scores.jockey_score,
-      scores.trainer_score, scores.post_position_score,
-      scores.total_score,
-      // ON CONFLICT用の値
-      scores.recent_performance_score, scores.course_aptitude_score,
-      scores.distance_aptitude_score, scores.last_3f_ability_score,
-      scores.g1_achievement_score, scores.rotation_score,
-      scores.track_condition_score, scores.jockey_score,
-      scores.trainer_score, scores.post_position_score,
-      scores.total_score
+    runStatement(
+      this.db,
+      queryBuilder
+        .insertInto('horse_scores')
+        .values({
+          horse_id: horseId,
+          race_id: raceId,
+          recent_performance_score: scores.recent_performance_score ?? null,
+          course_aptitude_score: scores.course_aptitude_score ?? null,
+          distance_aptitude_score: scores.distance_aptitude_score ?? null,
+          last_3f_ability_score: scores.last_3f_ability_score ?? null,
+          g1_achievement_score: scores.g1_achievement_score ?? null,
+          rotation_score: scores.rotation_score ?? null,
+          track_condition_score: scores.track_condition_score ?? null,
+          jockey_score: scores.jockey_score ?? null,
+          trainer_score: scores.trainer_score ?? null,
+          post_position_score: scores.post_position_score ?? null,
+          total_score: scores.total_score ?? null
+        })
+        .onConflict(oc =>
+          oc.columns(['horse_id', 'race_id']).doUpdateSet(eb => ({
+            recent_performance_score: eb.fn.coalesce(
+              eb.val(scores.recent_performance_score ?? null),
+              eb.ref('recent_performance_score')
+            ),
+            course_aptitude_score: eb.fn.coalesce(
+              eb.val(scores.course_aptitude_score ?? null),
+              eb.ref('course_aptitude_score')
+            ),
+            distance_aptitude_score: eb.fn.coalesce(
+              eb.val(scores.distance_aptitude_score ?? null),
+              eb.ref('distance_aptitude_score')
+            ),
+            last_3f_ability_score: eb.fn.coalesce(
+              eb.val(scores.last_3f_ability_score ?? null),
+              eb.ref('last_3f_ability_score')
+            ),
+            g1_achievement_score: eb.fn.coalesce(
+              eb.val(scores.g1_achievement_score ?? null),
+              eb.ref('g1_achievement_score')
+            ),
+            rotation_score: eb.fn.coalesce(eb.val(scores.rotation_score ?? null), eb.ref('rotation_score')),
+            track_condition_score: eb.fn.coalesce(
+              eb.val(scores.track_condition_score ?? null),
+              eb.ref('track_condition_score')
+            ),
+            jockey_score: eb.fn.coalesce(eb.val(scores.jockey_score ?? null), eb.ref('jockey_score')),
+            trainer_score: eb.fn.coalesce(eb.val(scores.trainer_score ?? null), eb.ref('trainer_score')),
+            post_position_score: eb.fn.coalesce(
+              eb.val(scores.post_position_score ?? null),
+              eb.ref('post_position_score')
+            ),
+            total_score: eb.fn.coalesce(eb.val(scores.total_score ?? null), eb.ref('total_score'))
+          }))
+        )
+        .compile()
     );
-  }
-
-  /**
-   * レース後の統計を一括更新（トランザクション）
-   */
-  updateStatsAfterRace(
-    horseId: number,
-    sireId: number | null,
-    course: RaceCourseContext,
-    finishPosition: number
-  ): void {
-    const { venueId, raceType, distanceCategory, trackCondition } = course;
-
-    this.db.transaction(() => {
-      // 馬場別成績を更新
-      this.updateHorseTrackStats(horseId, raceType, trackCondition, finishPosition);
-
-      // コース別成績を更新
-      this.updateHorseCourseStats(horseId, venueId, raceType, distanceCategory, finishPosition);
-
-      // 血統統計を更新
-      if (sireId) {
-        this.updateBloodlineStats(sireId, raceType, distanceCategory, trackCondition, finishPosition);
-      }
-    })();
   }
 
   /**
@@ -141,22 +159,30 @@ export class ScoreAggregateRepository {
     trackCondition: string,
     finishPosition: number
   ): void {
-    const won = finishPosition === 1;
-    const placed = finishPosition === 2;
-    const showed = finishPosition === 3;
+    const counts = toFinishCounts(finishPosition);
 
-    this.db.prepare(`
-      INSERT INTO horse_track_stats (horse_id, race_type, track_condition, runs, wins, places, shows)
-      VALUES (?, ?, ?, 1, ?, ?, ?)
-      ON CONFLICT(horse_id, race_type, track_condition) DO UPDATE SET
-        runs = runs + 1,
-        wins = wins + ?,
-        places = places + ?,
-        shows = shows + ?
-    `).run(
-      horseId, raceType, trackCondition,
-      won ? 1 : 0, placed ? 1 : 0, showed ? 1 : 0,
-      won ? 1 : 0, placed ? 1 : 0, showed ? 1 : 0
+    runStatement(
+      this.db,
+      queryBuilder
+        .insertInto('horse_track_stats')
+        .values({
+          horse_id: horseId,
+          race_type: raceType,
+          track_condition: trackCondition,
+          runs: 1,
+          ...counts
+        })
+        .onConflict(oc =>
+          oc
+            .columns(['horse_id', 'race_type', 'track_condition'])
+            .doUpdateSet(eb => ({
+              runs: eb('runs', '+', 1),
+              wins: eb('wins', '+', counts.wins),
+              places: eb('places', '+', counts.places),
+              shows: eb('shows', '+', counts.shows)
+            }))
+        )
+        .compile()
     );
   }
 
@@ -170,22 +196,31 @@ export class ScoreAggregateRepository {
     distanceCategory: string,
     finishPosition: number
   ): void {
-    const won = finishPosition === 1;
-    const placed = finishPosition === 2;
-    const showed = finishPosition === 3;
+    const counts = toFinishCounts(finishPosition);
 
-    this.db.prepare(`
-      INSERT INTO horse_course_stats (horse_id, venue_id, race_type, distance_category, runs, wins, places, shows)
-      VALUES (?, ?, ?, ?, 1, ?, ?, ?)
-      ON CONFLICT(horse_id, venue_id, race_type, distance_category) DO UPDATE SET
-        runs = runs + 1,
-        wins = wins + ?,
-        places = places + ?,
-        shows = shows + ?
-    `).run(
-      horseId, venueId, raceType, distanceCategory,
-      won ? 1 : 0, placed ? 1 : 0, showed ? 1 : 0,
-      won ? 1 : 0, placed ? 1 : 0, showed ? 1 : 0
+    runStatement(
+      this.db,
+      queryBuilder
+        .insertInto('horse_course_stats')
+        .values({
+          horse_id: horseId,
+          venue_id: venueId,
+          race_type: raceType,
+          distance_category: distanceCategory,
+          runs: 1,
+          ...counts
+        })
+        .onConflict(oc =>
+          oc
+            .columns(['horse_id', 'venue_id', 'race_type', 'distance_category'])
+            .doUpdateSet(eb => ({
+              runs: eb('runs', '+', 1),
+              wins: eb('wins', '+', counts.wins),
+              places: eb('places', '+', counts.places),
+              shows: eb('shows', '+', counts.shows)
+            }))
+        )
+        .compile()
     );
   }
 
@@ -199,22 +234,31 @@ export class ScoreAggregateRepository {
     trackCondition: string,
     finishPosition: number
   ): void {
-    const won = finishPosition === 1;
-    const placed = finishPosition === 2;
-    const showed = finishPosition === 3;
+    const counts = toFinishCounts(finishPosition);
 
-    this.db.prepare(`
-      INSERT INTO bloodline_stats (sire_id, race_type, distance_category, track_condition, runs, wins, places, shows)
-      VALUES (?, ?, ?, ?, 1, ?, ?, ?)
-      ON CONFLICT(sire_id, race_type, distance_category, track_condition) DO UPDATE SET
-        runs = runs + 1,
-        wins = wins + ?,
-        places = places + ?,
-        shows = shows + ?
-    `).run(
-      sireId, raceType, distanceCategory, trackCondition,
-      won ? 1 : 0, placed ? 1 : 0, showed ? 1 : 0,
-      won ? 1 : 0, placed ? 1 : 0, showed ? 1 : 0
+    runStatement(
+      this.db,
+      queryBuilder
+        .insertInto('bloodline_stats')
+        .values({
+          sire_id: sireId,
+          race_type: raceType,
+          distance_category: distanceCategory,
+          track_condition: trackCondition,
+          runs: 1,
+          ...counts
+        })
+        .onConflict(oc =>
+          oc
+            .columns(['sire_id', 'race_type', 'distance_category', 'track_condition'])
+            .doUpdateSet(eb => ({
+              runs: eb('runs', '+', 1),
+              wins: eb('wins', '+', counts.wins),
+              places: eb('places', '+', counts.places),
+              shows: eb('shows', '+', counts.shows)
+            }))
+        )
+        .compile()
     );
   }
 }

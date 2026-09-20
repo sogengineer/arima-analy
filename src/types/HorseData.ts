@@ -118,165 +118,30 @@ export interface ExtractionResult {
 }
 
 // ============================================
-// DB用型定義
+// DB由来の形を受け取る構造型
 // ============================================
 
-// マスタテーブル型
-export interface DBVenue {
-  id: number;
-  name: string;
-  region?: string;
-}
-
-export interface DBSire {
-  id: number;
-  name: string;
-  country?: string;
-}
-
-export interface DBMare {
-  id: number;
-  name: string;
-  sire_id?: number;
-}
-
-export interface DBTrainer {
-  id: number;
-  name: string;
-  stable?: '美浦' | '栗東';
-}
-
-export interface DBOwner {
-  id: number;
-  name: string;
-}
-
-export interface DBBreeder {
-  id: number;
-  name: string;
-}
-
-export interface DBJockey {
-  id: number;
-  name: string;
-  default_weight?: number;
-  apprentice_status?: string;
-}
-
-// コアテーブル型
-export interface DBHorse {
-  id: number;
-  name: string;
-  birth_year?: number;
-  sex?: '牡' | '牝' | '騸';
-  coat_color?: string;
-  sire_id?: number;
-  mare_id?: number;
-  trainer_id?: number;
-  owner_id?: number;
-  breeder_id?: number;
-  jra_horse_id?: string;
-}
-
-export interface DBRace {
-  id: number;
-  race_date: string;
-  venue_id: number;
-  race_number?: number;
-  race_name: string;
-  race_class?: string;
-  race_type?: '芝' | 'ダート' | '障害';
-  distance: number;
-  track_condition?: '良' | '稍重' | '重' | '不良';
-  age_condition?: string;
-  sex_condition?: string;
-  weight_condition?: string;
-  total_horses?: number;
-  prize_money?: string;
-  jra_race_id?: string;
-  grade?: string;
-  course_detail?: string;
-  weather?: string;
-  start_time?: string;
-  kaisai_label?: string;
-  lap_times?: string;
-}
-
-export interface DBRaceEntry {
-  id: number;
-  race_id: number;
-  horse_id: number;
-  jockey_id: number;
-  frame_number?: number;
-  horse_number: number;
-  assigned_weight?: number;
-  win_odds?: number;
-  place_odds_min?: number;
-  place_odds_max?: number;
-  popularity?: number;
-  horse_weight?: number;
-  weight_change?: number;
-  career_wins?: number;
-  career_places?: number;
-  career_shows?: number;
-  career_runs?: number;
-  total_prize_money?: string;
-}
-
-export interface DBRaceResult {
-  id: number;
-  entry_id: number;
-  finish_position?: number;
-  finish_status?: '完走' | '取消' | '除外' | '中止' | '失格' | '降着';
-  finish_time?: string;
-  finish_time_ms?: number;
-  margin?: string;
-  margin_seconds?: number;
-  last_3f_time?: number;
-  last_3f_rank?: number;
-  corner_positions?: string;
-  final_win_odds?: number;
-  final_place_odds?: number;
-  rating?: number;
-}
-
-// ビュー型
+/**
+ * `v_horse_details` ビューの行を受け取る構造
+ *
+ * @remarks
+ * domain の entities は repositories / database / kysely に依存できないため、
+ * ビューの行型（`Selectable<HorseDetailsView>`）を import せずに構造で受ける。
+ * 省略可（`?: T`）と NULL 可（`T | null`）のどちらの表現の行でも受け取れるようにしている。
+ * ビューそのものの正は `src/database/schema/Views.ts`。
+ */
 export interface HorseDetail {
   id: number;
   name: string;
-  birth_year?: number;
-  sex?: string;
-  sire_name?: string;
-  mare_name?: string;
-  mares_sire_name?: string;
-  trainer_name?: string;
-  stable?: string;
-  owner_name?: string;
-  breeder_name?: string;
-}
-
-export interface RaceResultDetail {
-  race_date: string;
-  venue: string;
-  race_number?: number;
-  race_name: string;
-  race_class?: string;
-  race_type?: string;
-  distance: number;
-  track_condition?: string;
-  frame_number?: number;
-  horse_number: number;
-  horse_name: string;
-  jockey_name: string;
-  assigned_weight?: number;
-  horse_weight?: number;
-  popularity?: number;
-  finish_position?: number;
-  finish_time?: string;
-  last_3f_time?: number;
-  corner_positions?: string;
-  margin?: string;
-  win_odds?: number;
+  birth_year?: number | null;
+  sex?: string | null;
+  sire_name?: string | null;
+  mare_name?: string | null;
+  mares_sire_name?: string | null;
+  trainer_name?: string | null;
+  stable?: string | null;
+  owner_name?: string | null;
+  breeder_name?: string | null;
 }
 
 // インポート用データ型
