@@ -1,0 +1,12 @@
+language js
+
+// DatabaseConnection の生成は合成ルート（commands / index.ts / models のフォールバック /
+// src/database の生成ファクトリ / テスト）に限定する。適用範囲は biome.json の overrides 側で絞る。
+// それ以外の層は生成済みの接続を注入で受け取ること。
+`new DatabaseConnection($...)` as $d where {
+  register_diagnostic(
+    span = $d,
+    message = "DatabaseConnection をここで生成しない。接続は引数で注入すること（生成は commands / index.ts / models のフォールバック / src/database のファクトリ / テストのみ）。",
+    severity = "error"
+  )
+}

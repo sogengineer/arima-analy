@@ -1,0 +1,22 @@
+language js
+
+// 相対 import の拡張子は付けない（プロジェクトの多数派に合わせる）。
+// Bun は拡張子なしの TS 解決に対応しているため、.js を付けると表記が混在する。
+or {
+  `import $_ from $src` as $d where {
+    $src <: r"['\"]\.[^'\"]*\.js['\"]",
+    register_diagnostic(
+      span = $d,
+      message = "相対 import に .js 拡張子を付けない（プロジェクトの多数派は拡張子なし）。",
+      severity = "warn"
+    )
+  },
+  `import $src` as $d where {
+    $src <: r"['\"]\.[^'\"]*\.js['\"]",
+    register_diagnostic(
+      span = $d,
+      message = "相対 import に .js 拡張子を付けない（プロジェクトの多数派は拡張子なし）。",
+      severity = "warn"
+    )
+  }
+}

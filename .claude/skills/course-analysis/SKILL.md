@@ -1,3 +1,8 @@
+---
+name: course-analysis
+description: 会場別のコース適性を分析する。会場を省略すると全会場の成績を表示する。「コース分析」「会場別の適性を見たい」といった依頼で発動する。
+---
+
 # コース分析
 
 指定会場へのコース適性を分析します。会場を省略した場合は全会場の成績を表示します。
@@ -6,11 +11,11 @@
 
 ```bash
 # 特定会場の分析
-npx tsx src/index.ts course-analysis 中山
-npx tsx src/index.ts course-analysis 東京
+bun start course-analysis 中山
+bun start course-analysis 東京
 
 # 全会場の分析
-npx tsx src/index.ts course-analysis
+bun start course-analysis
 ```
 
 ## 分析内容
