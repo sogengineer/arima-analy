@@ -142,6 +142,38 @@ export interface WalkForwardBlock {
   from: string;
   to: string;
   metrics: EvaluationMetrics;
+  /** このブロックで選ばれた L2 強度（学習窓の内側分割で選択） */
+  lambda: number;
+  /** λ 選択に使えた内側 fold 数。0 なら選択できず既定値へフォールバック */
+  innerFolds: number;
+}
+
+/** 学習データ不足でスキップした walk-forward ブロック */
+export interface SkippedBlock {
+  block: number;
+  trainRaces: number;
+  testRaces: number;
+  from: string;
+  to: string;
+  /** スキップ理由（表示用） */
+  reason: string;
+}
+
+/** walk-forward 検証のオプション */
+export interface WalkForwardOptions {
+  /** 目標ブロック数 */
+  blocks?: number;
+  /**
+   * 検証を始めるのに必要な最小学習レース数
+   *
+   * @remarks
+   * これを下回るブロックはスキップし、総合指標からも除外する。
+   */
+  minTrainRaces?: number;
+  /** λ の候補（内側分割で選ぶ） */
+  l2Candidates?: readonly number[];
+  /** λ 以外の学習オプション */
+  train?: TrainOptions;
 }
 
 /** walk-forward 検証の結果 */
@@ -167,9 +199,21 @@ export interface WalkForwardResult {
   marketBaseline: EvaluationMetrics;
   /** 市場ベースラインの算出元の内訳（テスト対象レース） */
   marketSourceCounts: MarketSourceCounts;
+  /**
+   * 小モデル（市場系 + 少数の強い特徴）のベースライン
+   *
+   * @remarks
+   * 本体と同じ walk-forward・同じ λ 選択手続きで、`SMALL_MODEL_FEATURE_NAMES`
+   * の10本だけを使って学習した同型モデル。少データで34次元が過剰かどうかを見る。
+   */
+  smallModelBaseline: EvaluationMetrics;
   /** ルールベース（10要素）のベースライン */
   ruleBaseline: EvaluationMetrics;
   blocks: WalkForwardBlock[];
+  /** 学習データ不足でスキップしたブロック（総合指標には含めない） */
+  skippedBlocks: SkippedBlock[];
+  /** 実際に適用した最小学習レース数 */
+  minTrainRaces: number;
   /** 単勝確率の較正テーブル */
   calibration: CalibrationBin[];
   /** 採用ゲートの判定 */
@@ -180,10 +224,17 @@ export interface WalkForwardResult {
 
 /** 採用ゲート判定 */
 export interface AdoptionGate {
-  /** log loss が「市場特徴量のみで学習した同型モデル」を下回ったか */
+  /** ゲート①（必須）: log loss が「市場特徴量のみで学習した同型モデル」を下回ったか */
   beatsMarketLogLoss: boolean;
-  /** top-1 的中率がルールベースを上回ったか */
-  beatsRuleTop1: boolean;
+  /**
+   * ゲート②（必須）: 順位づけ・二乗誤差のどちらかで市場のみモデル以上か
+   *
+   * @remarks
+   * 「top-1 が市場のみモデル以上」**または**「Brier が市場のみモデル以下」。
+   * 旧ゲート②（top-1 > ルールベース）は現データでルールベースがほぼランダム
+   * （9.9%）のため機能していなかったので、基準を市場側へ移した。
+   */
+  beatsMarketRanking: boolean;
   /** 両方を満たしたか（ML を主軸にしてよいか） */
   passed: boolean;
   mlLogLoss: number;
@@ -192,6 +243,12 @@ export interface AdoptionGate {
   /** 人気別勝率テーブルの log loss（参考値。判定には使わない） */
   popularityTableLogLoss: number;
   mlTop1: number;
+  /** 市場のみモデルの top-1（ゲート②の基準値） */
+  marketTop1: number;
+  mlBrier: number;
+  /** 市場のみモデルの Brier（ゲート②の基準値） */
+  marketBrier: number;
+  /** ルールベースの top-1（**参考表示のみ**。判定には使わない） */
   ruleTop1: number;
 }
 

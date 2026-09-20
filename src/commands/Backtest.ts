@@ -195,9 +195,9 @@ export class Backtest {
    * ML の walk-forward 検証を実行し、採用ゲートを判定して表示する
    *
    * @remarks
-   * 採用条件（設計書 Step6）:
-   * 1. 勝ち馬 log loss が市場オッズベースラインを下回る
-   * 2. top-1 的中率がルールベースを上回る
+   * 採用条件:
+   * 1. 勝ち馬 log loss が「市場特徴量のみモデル」を下回る
+   * 2. top-1 が市場のみモデル以上、または Brier が市場のみモデル以下
    *
    * 満たさない場合、`race-list` などの表示では **ルールベースを主** とし、
    * ML確率は参考値として併記する（フォールバック方針）。
@@ -205,7 +205,7 @@ export class Backtest {
   runMlAdoptionGate(blocks = 5): void {
     const ml = new MachineLearningModel(this.db);
     try {
-      const result = ml.walkForwardValidate(blocks);
+      const result = ml.walkForwardValidate({ blocks });
       ml.displayWalkForward(result);
 
       if (result.insufficientReason) {
