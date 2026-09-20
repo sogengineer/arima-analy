@@ -7,10 +7,7 @@
       "dependencies": {
         "commander": "^11.1.0",
         "iconv-lite": "^0.7.1",
-        "ml-logistic-regression": "^2.0.0",
         "ml-matrix": "^6.10.0",
-        "ml-random-forest": "^2.1.0",
-        "regression": "^2.0.1",
         "simple-statistics": "^7.8.8",
       },
       "devDependencies": {
@@ -69,33 +66,13 @@
 
     "is-any-array": ["is-any-array@3.0.0", "", {}, "sha512-o4h+tylWykC4BD1vaejp6gDxoM13bwW8FGuNs4yIKpj8xbBJcRxJx8vZpq0dCr7ZDEfeKjmsi/euolKhX6f/ww=="],
 
-    "median-quickselect": ["median-quickselect@1.0.1", "", {}, "sha512-/QL9ptNuLsdA68qO+2o10TKCyu621zwwTFdLvtu8rzRNKsn8zvuGoq/vDxECPyELFG8wu+BpyoMR9BnsJqfVZQ=="],
-
     "ml-array-max": ["ml-array-max@2.0.0", "", { "dependencies": { "is-any-array": "^3.0.0" } }, "sha512-QQZ4kENwpWmyNb98UXRDFXrmtIXuXtt1+bSbda/2KA85+F+rrJP8hZk6QOkCQXM2Th9mUDYdq/PNByPdT9ID4A=="],
-
-    "ml-array-mean": ["ml-array-mean@1.1.6", "", { "dependencies": { "ml-array-sum": "^1.1.6" } }, "sha512-MIdf7Zc8HznwIisyiJGRH9tRigg3Yf4FldW8DxKxpCCv/g5CafTw0RRu51nojVEOXuCQC7DRVVu5c7XXO/5joQ=="],
-
-    "ml-array-median": ["ml-array-median@1.1.6", "", { "dependencies": { "is-any-array": "^2.0.0", "median-quickselect": "^1.0.1" } }, "sha512-V6bV6bTPFRX8v5CaAx/7fuRXC39LLTHfPSVZZafdNaqNz2PFL5zEA7gesjv8dMXh+gwPeUMtB5QPovlTBaa4sw=="],
 
     "ml-array-min": ["ml-array-min@2.0.0", "", { "dependencies": { "is-any-array": "^3.0.0" } }, "sha512-GRj6Ky6sW9vGL6yIjgsHmXZ9YgrdmcQ8nCxPqEGeKc6dkfYg1XDYxGFxADUjNuZyoCd5PUscWAS4N+cFaX6hFg=="],
 
-    "ml-array-mode": ["ml-array-mode@1.1.5", "", { "dependencies": { "is-any-array": "^2.0.0" } }, "sha512-30dWTShQq05UzL+ZoG5OuuDvRl3APdz/bHwgZTgqRAJKOZApaWNQxg/ZnN5i/Uls3AjqabRZ70/QhX+/0bfZEA=="],
-
     "ml-array-rescale": ["ml-array-rescale@2.0.0", "", { "dependencies": { "is-any-array": "^3.0.0", "ml-array-max": "^2.0.0", "ml-array-min": "^2.0.0" } }, "sha512-2GGtKfSno94/kIloWGvpp/U5Q5vLvLrza+SAaGsLeo6Xj4mEbA6Gqx+oTfZFkxnd1grT2X007HfJNs3T5BsiVg=="],
 
-    "ml-array-sum": ["ml-array-sum@1.1.6", "", { "dependencies": { "is-any-array": "^2.0.0" } }, "sha512-29mAh2GwH7ZmiRnup4UyibQZB9+ZLyMShvt4cH4eTK+cL2oEMIZFnSyB3SS8MlsTh6q/w/yh48KmqLxmovN4Dw=="],
-
-    "ml-cart": ["ml-cart@2.1.1", "", { "dependencies": { "ml-array-mean": "^1.1.5", "ml-matrix": "^6.8.2" } }, "sha512-f6rIj4EzbjqKLJa2Qmm5AjZ0WVgk+Y7J1N/+pQVaFr0d4oM1uZPLOh5h665LyH+bLBHTFEbvSR4OLKmJRQ8KfA=="],
-
-    "ml-logistic-regression": ["ml-logistic-regression@2.0.0", "", { "dependencies": { "ml-matrix": "^6.5.0" } }, "sha512-xHhB91ut8GRRbJyB1ZQfKsl1MHmE1PqMeRjxhks96M5BGvCbC9eEojf4KgRMKM2LxFblhVUcVzweAoPB48Nt0A=="],
-
     "ml-matrix": ["ml-matrix@6.13.0", "", { "dependencies": { "is-any-array": "^3.0.0", "ml-array-rescale": "^2.0.0" } }, "sha512-QpV0UTUkglg6vPUgThKGBEtit2ac6habSoZ33bwI9rU0UHZLqw6G3ukTIE8zWiUF3sjK8YAlhx/o/b9layzH8A=="],
-
-    "ml-random-forest": ["ml-random-forest@2.1.0", "", { "dependencies": { "ml-array-mean": "^1.1.5", "ml-array-median": "^1.1.5", "ml-array-mode": "^1.1.4", "ml-cart": "^2.1.1", "ml-matrix": "^6.8.2", "random-js": "^2.1.0" } }, "sha512-5PpfMFWdCxchjte7N6W38XNqycbheOadrfKySV0mojAfKorXy1HnPLthz3NFDnSO4nnIOaxRtr26bc4ZQaautA=="],
-
-    "random-js": ["random-js@2.1.0", "", {}, "sha512-CRUyWmnzmZBA7RZSVGq0xMqmgCyPPxbiKNLFA5ud7KenojVX2s7Gv+V7eB52beKTPGxWRnVZ7D/tCIgYJJ8vNQ=="],
-
-    "regression": ["regression@2.0.1", "", {}, "sha512-A4XYsc37dsBaNOgEjkJKzfJlE394IMmUPlI/p3TTI9u3T+2a+eox5Pr/CPUqF0eszeWZJPAc6QkroAhuUpWDJQ=="],
 
     "safer-buffer": ["safer-buffer@2.1.2", "", {}, "sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg=="],
 
@@ -104,11 +81,5 @@
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
-
-    "ml-array-median/is-any-array": ["is-any-array@2.0.1", "", {}, "sha512-UtilS7hLRu++wb/WBAw9bNuP1Eg04Ivn1vERJck8zJthEvXCBEBpGR/33u/xLKWEQf95803oalHrVDptcAvFdQ=="],
-
-    "ml-array-mode/is-any-array": ["is-any-array@2.0.1", "", {}, "sha512-UtilS7hLRu++wb/WBAw9bNuP1Eg04Ivn1vERJck8zJthEvXCBEBpGR/33u/xLKWEQf95803oalHrVDptcAvFdQ=="],
-
-    "ml-array-sum/is-any-array": ["is-any-array@2.0.1", "", {}, "sha512-UtilS7hLRu++wb/WBAw9bNuP1Eg04Ivn1vERJck8zJthEvXCBEBpGR/33u/xLKWEQf95803oalHrVDptcAvFdQ=="],
   }
 }
