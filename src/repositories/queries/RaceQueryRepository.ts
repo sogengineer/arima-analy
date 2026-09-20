@@ -7,6 +7,34 @@ import type { Database } from 'bun:sqlite';
 import type { RaceWithVenue, EntryWithDetails } from '../../types/RepositoryTypes';
 import type { DBRace, DBVenue } from '../../types/HorseData';
 
+/**
+ * 結果があるレースの取得 SQL
+ *
+ * @remarks
+ * 重賞限定版は条件断片を差し込むのではなく、完全な SQL として別に持つ
+ * （`prepare` に渡す文字列に実行時の値を混ぜない）。
+ */
+const RACES_WITH_RESULTS_SQL = `
+      SELECT DISTINCT r.*, v.name as venue_name
+      FROM races r
+      JOIN venues v ON r.venue_id = v.id
+      JOIN race_entries e ON e.race_id = r.id
+      JOIN race_results rr ON rr.entry_id = e.id
+      WHERE rr.finish_position IS NOT NULL
+      ORDER BY r.race_date DESC
+    `;
+
+const RACES_WITH_RESULTS_GRADE_ONLY_SQL = `
+      SELECT DISTINCT r.*, v.name as venue_name
+      FROM races r
+      JOIN venues v ON r.venue_id = v.id
+      JOIN race_entries e ON e.race_id = r.id
+      JOIN race_results rr ON rr.entry_id = e.id
+      WHERE rr.finish_position IS NOT NULL
+      AND (r.race_class LIKE '%G1%' OR r.race_class LIKE '%G2%' OR r.race_class LIKE '%G3%' OR r.race_name LIKE '%記念%')
+      ORDER BY r.race_date DESC
+    `;
+
 export class RaceQueryRepository {
   constructor(private readonly db: Database) {}
 
@@ -37,7 +65,7 @@ export class RaceQueryRepository {
   getRaceByIdOrName(idOrName: string): DBRace | undefined {
     // 数値の場合はIDで検索
     const numId = parseInt(idOrName, 10);
-    if (!isNaN(numId)) {
+    if (!Number.isNaN(numId)) {
       return this.db.prepare(
         'SELECT * FROM races WHERE id = ?'
       ).get(numId) as DBRace | undefined;
@@ -139,20 +167,8 @@ export class RaceQueryRepository {
    * @param gradeOnly - 重賞のみに限定するか
    */
   getRacesWithResults(gradeOnly: boolean = false): RaceWithVenue[] {
-    const gradeCondition = gradeOnly
-      ? "AND (r.race_class LIKE '%G1%' OR r.race_class LIKE '%G2%' OR r.race_class LIKE '%G3%' OR r.race_name LIKE '%記念%')"
-      : '';
-
-    return this.db.prepare(`
-      SELECT DISTINCT r.*, v.name as venue_name
-      FROM races r
-      JOIN venues v ON r.venue_id = v.id
-      JOIN race_entries e ON e.race_id = r.id
-      JOIN race_results rr ON rr.entry_id = e.id
-      WHERE rr.finish_position IS NOT NULL
-      ${gradeCondition}
-      ORDER BY r.race_date DESC
-    `).all() as RaceWithVenue[];
+    const sql = gradeOnly ? RACES_WITH_RESULTS_GRADE_ONLY_SQL : RACES_WITH_RESULTS_SQL;
+    return this.db.prepare(sql).all() as RaceWithVenue[];
   }
 
   /**

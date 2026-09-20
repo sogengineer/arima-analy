@@ -5,9 +5,10 @@
  */
 
 import { Database } from 'bun:sqlite';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { runMigrations } from './migrations';
 
 export type DatabaseType = Database;
 
@@ -33,6 +34,14 @@ export class DatabaseConnection {
       const schemaPath = join(__dirname, 'schema.sql');
       const schema = readFileSync(schemaPath, 'utf-8');
       this.db.exec(schema);
+
+      // 既存DBには CREATE TABLE IF NOT EXISTS で新しい列が入らないため、
+      // 追加型マイグレーションで差分だけを埋める
+      const applied = runMigrations(this.db);
+      if (applied.length > 0) {
+        console.log(`Applied ${applied.length} migration(s): ${applied.join(', ')}`);
+      }
+
       console.log('Database initialized successfully');
     } catch (error) {
       console.error('Failed to initialize database:', error);

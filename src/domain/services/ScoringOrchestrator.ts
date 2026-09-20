@@ -20,13 +20,14 @@
 
 import type { Database } from 'bun:sqlite';
 import { Horse } from '../entities/Horse';
-import { Jockey, JockeyBuilder } from '../entities/Jockey';
+import { Jockey } from '../entities/Jockey';
 import { Race } from '../entities/Race';
 import { RaceResult } from '../entities/RaceResult';
 import type { ScoreComponents } from '../valueObjects/ScoreComponents';
 import { HorseQueryRepository } from '../../repositories/queries/HorseQueryRepository';
 import { RaceQueryRepository } from '../../repositories/queries/RaceQueryRepository';
 import { JockeyQueryRepository } from '../../repositories/queries/JockeyQueryRepository';
+import { calculateFrameNumber } from '../../constants/ScoringConstants';
 import type { EntryWithDetails, RaceWithVenue, HorseDetail, HorseRaceResult, CourseStats, TrackStats } from '../../types/RepositoryTypes';
 
 /**
@@ -41,6 +42,14 @@ export interface HorseScoreResult {
   horseNumber?: number;
   /** スコア構成要素 */
   scores: ScoreComponents;
+}
+
+/** レース単位でまとめ取りした馬データのキャッシュ（horseId → 各種データ） */
+interface RaceHorseDataCache {
+  detailsMap: Map<number, HorseDetail>;
+  resultsMap: Map<number, HorseRaceResult[]>;
+  courseStatsMap: Map<number, CourseStats[]>;
+  trackStatsMap: Map<number, TrackStats[]>;
 }
 
 export class ScoringOrchestrator {
@@ -62,11 +71,18 @@ export class ScoringOrchestrator {
    * 従来: 1 + 4N クエリ（N=出走馬数）
    * 改善後: 5クエリ固定
    *
+   * as-of 評価:
+   * 特徴量は `asOf` より前のデータのみから組み立てる。
+   * 省略時は当該レースの開催日を使うため、同じレースを
+   * 「結果投入前」「結果投入後」のどちらで評価しても同じスコアになる
+   * （look-ahead リークの遮断）。
+   *
    * @param raceId - レースID
+   * @param asOf - 評価基準日（YYYY-MM-DD）。省略時は当該レースの race_date
    * @returns 全出走馬のスコア結果
    * @throws {Error} レースが見つからない場合
    */
-  calculateScoresForRace(raceId: number): HorseScoreResult[] {
+  calculateScoresForRace(raceId: number, asOf?: string): HorseScoreResult[] {
     const raceRecord = this.raceRepo.getRaceWithVenue(raceId);
     if (!raceRecord) {
       throw new Error(`Race not found: ${raceId}`);
@@ -79,16 +95,19 @@ export class ScoringOrchestrator {
       return [];
     }
 
+    // as-of 基準日（省略時は当該レースの開催日）
+    const cutoff = asOf ?? raceRecord.race_date;
+
     // 馬IDを収集
     const horseIds = entries
       .map(e => e.horse_id)
       .filter((id): id is number => id != null);
 
-    // バッチ取得（4クエリ）
+    // バッチ取得（4クエリ）。いずれも cutoff より前のデータのみを使う
     const detailsMap = this.horseRepo.getHorsesWithDetailsBatch(horseIds);
-    const resultsMap = this.horseRepo.getHorsesRaceResultsBatch(horseIds);
-    const courseStatsMap = this.horseRepo.getHorsesCourseStatsBatch(horseIds);
-    const trackStatsMap = this.horseRepo.getHorsesTrackStatsBatch(horseIds);
+    const resultsMap = this.horseRepo.getHorsesRaceResultsBatch(horseIds, cutoff);
+    const courseStatsMap = this.horseRepo.getHorsesCourseStatsAsOf(horseIds, cutoff);
+    const trackStatsMap = this.horseRepo.getHorsesTrackStatsAsOf(horseIds, cutoff);
 
     const results: HorseScoreResult[] = [];
 
@@ -96,17 +115,15 @@ export class ScoringOrchestrator {
       if (!entry.horse_id) continue;
 
       // キャッシュからエンティティを構築
-      const horse = this.buildHorseEntityFromCache(
-        entry.horse_id,
-        entry.horse_name,
+      const horse = this.buildHorseEntityFromCache(entry.horse_id, entry.horse_name, {
         detailsMap,
         resultsMap,
         courseStatsMap,
         trackStatsMap
-      );
+      });
 
       const jockey = entry.jockey_id
-        ? this.buildJockeyEntity(entry.jockey_id, race.venue, entry.trainer_id)
+        ? this.buildJockeyEntity(entry.jockey_id, race.venue, entry.trainer_id, cutoff)
         : null;
 
       // TODO: Trainerエンティティの構築は将来実装
@@ -115,11 +132,16 @@ export class ScoringOrchestrator {
       //   : null;
 
       // 計算はエンティティに委譲（枠番情報を追加）
+      // frame_number が未登録のデータでは馬番と総頭数から枠番を算出する
+      const framePosition = entry.frame_number
+        ?? calculateFrameNumber(entry.horse_number, race.totalHorses ?? entries.length);
+
       const scores = horse.calculateTotalScore(
         jockey,
         race,
         null,  // trainer（将来実装）
-        entry.horse_number  // 枠番
+        framePosition,   // 枠番
+        entry.trainer_id // 騎手×調教師コンビ成績の参照用
       );
 
       results.push({
@@ -140,18 +162,26 @@ export class ScoringOrchestrator {
    * @param race - レースエンティティ
    * @returns スコア構成要素
    */
-  calculateScoreForEntry(entry: EntryWithDetails, race: Race): ScoreComponents {
-    const horse = this.buildHorseEntity(entry.horse_id);
+  calculateScoreForEntry(entry: EntryWithDetails, race: Race, asOf?: string): ScoreComponents {
+    const cutoff = asOf ?? race.date;
+    const horse = this.buildHorseEntity(entry.horse_id, cutoff);
     const jockey = entry.jockey_id
-      ? this.buildJockeyEntity(entry.jockey_id, race.venue, entry.trainer_id)
+      ? this.buildJockeyEntity(entry.jockey_id, race.venue, entry.trainer_id, cutoff)
       : null;
+
+    const framePosition = entry.frame_number
+      ?? calculateFrameNumber(
+        entry.horse_number,
+        race.totalHorses ?? this.raceRepo.getRaceEntries(race.id).length
+      );
 
     // 計算はエンティティに委譲（枠番情報を追加）
     return horse.calculateTotalScore(
       jockey,
       race,
       null,  // trainer（将来実装）
-      entry.horse_number  // 枠番
+      framePosition,      // 枠番
+      entry.trainer_id     // 騎手×調教師コンビ成績の参照用
     );
   }
 
@@ -160,24 +190,18 @@ export class ScoringOrchestrator {
    *
    * @param horseId - 馬ID
    * @param horseName - 馬名
-   * @param detailsMap - 馬詳細のキャッシュ
-   * @param resultsMap - レース結果のキャッシュ
-   * @param courseStatsMap - コース成績のキャッシュ
-   * @param trackStatsMap - 馬場成績のキャッシュ
+   * @param cache - レース単位でまとめ取りした馬データのキャッシュ
    * @returns Horse エンティティ
    */
   private buildHorseEntityFromCache(
     horseId: number,
     horseName: string,
-    detailsMap: Map<number, HorseDetail>,
-    resultsMap: Map<number, HorseRaceResult[]>,
-    courseStatsMap: Map<number, CourseStats[]>,
-    trackStatsMap: Map<number, TrackStats[]>
+    cache: RaceHorseDataCache
   ): Horse {
-    const detail = detailsMap.get(horseId);
-    const raceResults = resultsMap.get(horseId) ?? [];
-    const courseStats = courseStatsMap.get(horseId) ?? [];
-    const trackStats = trackStatsMap.get(horseId) ?? [];
+    const detail = cache.detailsMap.get(horseId);
+    const raceResults = cache.resultsMap.get(horseId) ?? [];
+    const courseStats = cache.courseStatsMap.get(horseId) ?? [];
+    const trackStats = cache.trackStatsMap.get(horseId) ?? [];
 
     const name = detail?.name ?? horseName;
 
@@ -200,11 +224,15 @@ export class ScoringOrchestrator {
    * @param horseId - 馬ID
    * @returns Horse エンティティ
    */
-  buildHorseEntity(horseId: number): Horse {
+  buildHorseEntity(horseId: number, asOf?: string): Horse {
     const detail = this.horseRepo.getHorseWithDetails(horseId);
-    const raceResults = this.horseRepo.getHorseRaceResults(horseId);
-    const courseStats = this.horseRepo.getHorseCourseStats(horseId);
-    const trackStats = this.horseRepo.getHorseTrackStats(horseId);
+    const raceResults = this.horseRepo.getHorseRaceResults(horseId, undefined, asOf);
+    const courseStats = asOf
+      ? (this.horseRepo.getHorsesCourseStatsAsOf([horseId], asOf).get(horseId) ?? [])
+      : this.horseRepo.getHorseCourseStats(horseId);
+    const trackStats = asOf
+      ? (this.horseRepo.getHorsesTrackStatsAsOf([horseId], asOf).get(horseId) ?? [])
+      : this.horseRepo.getHorseTrackStats(horseId);
 
     const name = detail?.name ?? `Horse#${horseId}`;
 
@@ -227,29 +255,39 @@ export class ScoringOrchestrator {
    * @param jockeyId - 騎手ID
    * @param venue - 会場名
    * @param trainerId - 調教師ID（省略可）
+   * @param asOf - 評価基準日（省略時は全期間の成績を使う）
    * @returns Jockey エンティティ
+   *
+   * @remarks
+   * 騎手成績も `race_results` からの集計なので、`asOf` を渡さないと
+   * 未来のレース結果が騎手スコアに混入する（look-ahead リーク）。
    */
-  buildJockeyEntity(jockeyId: number, venue: string, trainerId?: number): Jockey {
+  buildJockeyEntity(
+    jockeyId: number,
+    venue: string,
+    trainerId?: number,
+    asOf?: string
+  ): Jockey {
     const jockeyRecord = this.jockeyRepo.getJockeyById(jockeyId);
     const name = jockeyRecord?.name ?? `Jockey#${jockeyId}`;
 
     const builder = Jockey.builder(jockeyId, name);
 
     // 会場別成績を取得
-    const venueStats = this.jockeyRepo.getJockeyVenueStats(jockeyId, venue);
+    const venueStats = this.jockeyRepo.getJockeyVenueStats(jockeyId, venue, asOf);
     if (venueStats) {
       builder.withVenueStats(venue, venueStats);
     }
 
     // 全体成績を取得
-    const overallStats = this.jockeyRepo.getJockeyOverallStats(jockeyId);
+    const overallStats = this.jockeyRepo.getJockeyOverallStats(jockeyId, asOf);
     if (overallStats) {
       builder.withOverallStats(overallStats);
     }
 
     // 調教師コンビ成績を取得
     if (trainerId) {
-      const comboStats = this.jockeyRepo.getJockeyTrainerStats(jockeyId, trainerId);
+      const comboStats = this.jockeyRepo.getJockeyTrainerStats(jockeyId, trainerId, asOf);
       if (comboStats) {
         builder.withTrainerComboStats(trainerId, comboStats);
       }

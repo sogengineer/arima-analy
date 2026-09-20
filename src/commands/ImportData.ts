@@ -1,13 +1,26 @@
-import { DatabaseConnection } from '../database/DatabaseConnection.js';
-import { HorseAggregateRepository } from '../repositories/aggregates/HorseAggregateRepository.js';
-import { RaceAggregateRepository } from '../repositories/aggregates/RaceAggregateRepository.js';
-import { ScoreAggregateRepository } from '../repositories/aggregates/ScoreAggregateRepository.js';
-import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository.js';
-import { StatsQueryRepository } from '../repositories/queries/StatsQueryRepository.js';
-import { Backtest } from './Backtest.js';
-import { MachineLearningModel } from '../models/MachineLearningModel.js';
+import { DatabaseConnection } from '../database/DatabaseConnection';
+import { HorseAggregateRepository } from '../repositories/aggregates/HorseAggregateRepository';
+import { RaceAggregateRepository } from '../repositories/aggregates/RaceAggregateRepository';
+import { ScoreAggregateRepository } from '../repositories/aggregates/ScoreAggregateRepository';
+import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
+import { StatsQueryRepository } from '../repositories/queries/StatsQueryRepository';
 import { readFileSync } from 'node:fs';
-import { ExtractedRaceData, HorseData } from '../types/HorseData.js';
+import type { ExtractedRaceData, HorseData } from '../types/HorseData';
+import { runAutoBacktest, runAutoOptimizeWeights } from './importData/autoReports';
+import {
+  calculateBirthYear,
+  parseDistanceString,
+  parseJapaneseDate,
+  parseRaceType,
+  parseTrackCondition
+} from './importData/parsers';
+
+interface ImportCounts {
+  horseInsertCount: number;
+  horseUpdateCount: number;
+  entryCount: number;
+  horseDataForPreviousRaces: HorseData[];
+}
 
 export class ImportData {
   private readonly connection: DatabaseConnection;
@@ -45,91 +58,27 @@ export class ImportData {
       const result = db.transaction(() => {
         // 1. レース情報の登録
         const raceInfo = jsonData.raceInfo;
-        const raceType = this.parseRaceType(raceInfo.courseType);
-        const { id: raceId, updated: raceUpdated } = this.raceAggregateRepo.insertRace({
-          raceDate: raceInfo.date,
-          venue: raceInfo.venue,
-          raceNumber: raceInfo.raceNumber,
-          raceName: raceInfo.raceName,
-          raceClass: raceInfo.raceClass,
-          raceType: raceType,
-          distance: raceInfo.distance,
-          trackCondition: this.parseTrackCondition(raceInfo.trackCondition),
-          totalHorses: jsonData.horseCount
-        });
+        const { id: raceId, updated: raceUpdated } = this.registerRace(jsonData);
         console.log(`🏁 レース${raceUpdated ? '更新' : '登録'}: ${raceInfo.raceName} (ID: ${raceId})`);
 
         // 2. 馬データのインポート
-        let horseInsertCount = 0;
-        let horseUpdateCount = 0;
-        let entryCount = 0;
-        const horseDataForPreviousRaces: { horse: HorseData; horseId: number }[] = [];
-
-        for (const horse of jsonData.horses) {
-          // 2-1. 馬を登録
-          const { id: horseId, updated } = this.horseAggregateRepo.insertHorseWithBloodline({
-            name: horse.basicInfo.name,
-            birthYear: this.calculateBirthYear(horse.basicInfo.age, raceInfo.date),
-            sex: horse.basicInfo.sex,
-            sire: horse.bloodline.sire,
-            mare: horse.bloodline.mare,
-            maresSire: horse.bloodline.maresSire,
-            trainer: horse.basicInfo.trainerName,
-            trainerStable: horse.basicInfo.trainerDivision,
-            owner: horse.basicInfo.ownerName,
-            breeder: horse.basicInfo.breederName
-          });
-          if (updated) {
-            horseUpdateCount++;
-          } else {
-            horseInsertCount++;
-          }
-
-          // 2-2. 出馬表エントリの登録
-          this.raceAggregateRepo.insertRaceEntry(raceId, {
-            horseName: horse.basicInfo.name,
-            sireName: horse.bloodline.sire,
-            mareName: horse.bloodline.mare,
-            jockeyName: horse.jockey.name,
-            frameNumber: horse.raceInfo.frameNumber,
-            horseNumber: horse.raceInfo.horseNumber,
-            assignedWeight: horse.jockey.weight,
-            winOdds: horse.raceInfo.winOdds,
-            popularity: horse.raceInfo.popularity,
-            careerWins: horse.record.wins,
-            careerPlaces: horse.record.places,
-            careerShows: horse.record.shows,
-            careerRuns: horse.record.runs,
-            totalPrizeMoney: horse.record.prizeMoney
-          });
-          entryCount++;
-
-          // 前走データは後で別トランザクションでインポート
-          horseDataForPreviousRaces.push({ horse, horseId });
-        }
-
-        return { horseInsertCount, horseUpdateCount, entryCount, horseDataForPreviousRaces };
+        return this.registerHorsesAndEntries(raceId, jsonData);
       })();
 
       // 3. 前走データのインポート（メイントランザクションとは独立）
-      // 前走データのエラーがメインのインポートに影響しないように分離
-      let previousRaceCount = 0;
-      for (const { horse, horseId } of result.horseDataForPreviousRaces) {
-        try {
-          this.importPreviousRaces(horse, horseId);
-          previousRaceCount++;
-        } catch (error) {
-          console.warn(`⚠️  ${horse.basicInfo.name} の前走データインポートをスキップ`);
-        }
-      }
+      const previousRaceCount = this.importAllPreviousRaces(result.horseDataForPreviousRaces);
+
+      // 保存済み結果を正として再集計し、訂正や過去の集計漏れを反映する。
+      this.scoreAggregateRepo.rebuildHorseStats();
 
       console.log('✅ 抽出JSONからのDBインポート完了');
       console.log(`🐎 馬: 新規${result.horseInsertCount}頭, 更新${result.horseUpdateCount}頭`);
       console.log(`📋 出馬表: ${result.entryCount}件`);
+      console.log(`📅 前走データ: ${previousRaceCount}頭分`);
 
       // バックテスト＋重み最適化を自動実行
-      this.runAutoBacktest();
-      this.runAutoOptimizeWeights();
+      runAutoBacktest(db);
+      runAutoOptimizeWeights(db);
 
     } catch (error) {
       console.error('❌ 抽出JSONからのインポートに失敗:', error);
@@ -139,70 +88,119 @@ export class ImportData {
   }
 
   /**
-   * インポート後の自動バックテスト
-   * 直近の重賞レースで予測精度をサマリー表示
+   * レース情報を登録する
    */
-  private runAutoBacktest(): void {
-    try {
-      const db = this.connection.getConnection();
-      const backtest = new Backtest(db);
-      const summary = backtest.runQuickSummary();
-
-      if (summary && summary.totalRaces > 0) {
-        console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('📊 バックテスト自動実行（直近重賞10レース）');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log(`  対象レース:   ${summary.totalRaces}件`);
-        console.log(`  1位的中率:    ${(summary.top1Accuracy * 100).toFixed(1)}%`);
-        console.log(`  上位3頭精度:  ${(summary.top3Accuracy * 100).toFixed(1)}%`);
-        console.log(`  順位相関:     ${summary.avgCorrelation.toFixed(3)}`);
-        console.log('');
-        console.log('💡 詳細は `bun start backtest --verbose` で確認できます');
-      }
-    } catch (error) {
-      // バックテストのエラーはインポート全体を失敗させない
-      console.warn('⚠️  バックテスト自動実行をスキップしました');
-    }
+  private registerRace(jsonData: ExtractedRaceData): { id: number; updated: boolean } {
+    const raceInfo = jsonData.raceInfo;
+    return this.raceAggregateRepo.insertRace({
+      raceDate: raceInfo.date,
+      venue: raceInfo.venue,
+      raceNumber: raceInfo.raceNumber,
+      raceName: raceInfo.raceName,
+      raceClass: raceInfo.raceClass,
+      raceType: parseRaceType(raceInfo.courseType),
+      distance: raceInfo.distance,
+      trackCondition: parseTrackCondition(raceInfo.trackCondition),
+      totalHorses: jsonData.horseCount,
+      startTime: raceInfo.startTime
+    });
   }
 
   /**
-   * インポート後の自動重み最適化
-   * 改善がある場合のみ結果を表示
+   * 馬と出馬表エントリを登録し、件数と前走インポート対象を返す
    */
-  private runAutoOptimizeWeights(): void {
-    try {
-      const db = this.connection.getConnection();
-      const ml = new MachineLearningModel(db);
-      const result = ml.runQuickOptimization();
+  private registerHorsesAndEntries(raceId: number, jsonData: ExtractedRaceData): ImportCounts {
+    let horseInsertCount = 0;
+    let horseUpdateCount = 0;
+    let entryCount = 0;
+    const horseDataForPreviousRaces: HorseData[] = [];
 
-      if (result && result.dataCount >= 20) {
-        console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('🔧 重み最適化チェック');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log(`  学習データ:   ${result.dataCount}件`);
-
-        if (result.improvement > 0) {
-          console.log(`  予測改善:     +${result.improvement.toFixed(1)}%`);
-          console.log('');
-          console.log('💡 `bun start optimize-weights --output` で詳細確認');
-        } else {
-          console.log('  予測改善:     なし（現行重みが最適）');
-        }
+    for (const horse of jsonData.horses) {
+      // 2-1. 馬を登録
+      const { updated } = this.horseAggregateRepo.insertHorseWithBloodline({
+        name: horse.basicInfo.name,
+        jraHorseId: horse.basicInfo.jraHorseId,
+        birthYear: calculateBirthYear(horse.basicInfo.age, jsonData.raceInfo.date),
+        sex: horse.basicInfo.sex,
+        sire: horse.bloodline.sire,
+        mare: horse.bloodline.mare,
+        maresSire: horse.bloodline.maresSire,
+        trainer: horse.basicInfo.trainerName,
+        trainerStable: horse.basicInfo.trainerDivision,
+        owner: horse.basicInfo.ownerName,
+        breeder: horse.basicInfo.breederName
+      });
+      if (updated) {
+        horseUpdateCount++;
+      } else {
+        horseInsertCount++;
       }
-    } catch (error) {
-      // 最適化のエラーはインポート全体を失敗させない
-      console.warn('⚠️  重み最適化チェックをスキップしました');
+
+      // 2-2. 出馬表エントリの登録
+      this.raceAggregateRepo.insertRaceEntry(raceId, {
+        horseName: horse.basicInfo.name,
+        jraHorseId: horse.basicInfo.jraHorseId,
+        sireName: horse.bloodline.sire,
+        mareName: horse.bloodline.mare,
+        jockeyName: horse.jockey.name,
+        frameNumber: horse.raceInfo.frameNumber,
+        horseNumber: horse.raceInfo.horseNumber,
+        assignedWeight: horse.jockey.weight,
+        // 欠損は undefined のまま渡して NULL にする。
+        // 0 を書くと popularity=0 が「1番人気」相当に正規化され、
+        // オッズ0倍が有効値として扱われる（欠損の表現を NULL に統一する）
+        winOdds: horse.raceInfo.winOdds != null && horse.raceInfo.winOdds > 0
+          ? horse.raceInfo.winOdds
+          : undefined,
+        popularity: horse.raceInfo.popularity != null && horse.raceInfo.popularity >= 1
+          ? horse.raceInfo.popularity
+          : undefined,
+        horseWeight: horse.raceInfo.horseWeight,
+        weightChange: horse.raceInfo.weightChange,
+        careerWins: horse.record.wins,
+        careerPlaces: horse.record.places,
+        careerShows: horse.record.shows,
+        careerRuns: horse.record.runs,
+        totalPrizeMoney: horse.record.prizeMoney
+      });
+      entryCount++;
+
+      // 前走データは後で別トランザクションでインポート
+      horseDataForPreviousRaces.push(horse);
     }
+
+    return { horseInsertCount, horseUpdateCount, entryCount, horseDataForPreviousRaces };
   }
 
-  private importPreviousRaces(horse: HorseData, horseId: number): void {
+  /**
+   * 前走データをインポートする（メイントランザクションとは独立）
+   *
+   * @remarks
+   * 前走データのエラーがメインのインポートに影響しないように分離している。
+   *
+   * @returns 前走データをインポートできた頭数
+   */
+  private importAllPreviousRaces(horses: HorseData[]): number {
+    let previousRaceCount = 0;
+    for (const horse of horses) {
+      try {
+        this.importPreviousRaces(horse);
+        previousRaceCount++;
+      } catch (error) {
+        console.warn(`⚠️  ${horse.basicInfo.name} の前走データインポートをスキップ:`, error);
+      }
+    }
+    return previousRaceCount;
+  }
+
+  private importPreviousRaces(horse: HorseData): void {
     if (!horse.previousRaces || horse.previousRaces.length === 0) return;
 
     for (const prevRace of horse.previousRaces) {
       try {
         // 前走のレースを登録
-        const { distance, raceType } = this.parseDistanceString(prevRace.distance);
-        const raceDate = this.parseJapaneseDate(prevRace.date);
+        const { distance, raceType } = parseDistanceString(prevRace.distance);
+        const raceDate = parseJapaneseDate(prevRace.date);
 
         // 前走データはレース番号が不明なため、レース名でマッチング
         const { id: prevRaceId } = this.raceAggregateRepo.insertRace({
@@ -212,7 +210,7 @@ export class ImportData {
           raceName: prevRace.raceName,
           raceType: raceType,
           distance: distance,
-          trackCondition: this.parseTrackCondition(prevRace.trackCondition),
+          trackCondition: parseTrackCondition(prevRace.trackCondition),
           totalHorses: prevRace.totalHorses
         }, true);  // matchByName: true で既存レースをレース名でマッチング
 
@@ -236,17 +234,6 @@ export class ImportData {
           margin: prevRace.margin
         });
 
-        // 馬場適性を更新
-        if (prevRace.place) {
-          const finishPos = Number(prevRace.place);
-          this.scoreAggregateRepo.updateHorseTrackStats(
-            horseId,
-            raceType || 'ダート',
-            prevRace.trackCondition || '良',
-            finishPos
-          );
-        }
-
       } catch (error) {
         // 前走データのインポートエラーは警告のみ
         console.warn(`前走データのインポートに失敗 (${prevRace.raceName}):`, error);
@@ -254,61 +241,11 @@ export class ImportData {
     }
   }
 
-  private parseDistanceString(distanceStr: string): { distance: number; raceType: '芝' | 'ダート' | '障害' } {
-    const match = distanceStr.match(/(\d+)(芝|ダ|障)/);
-    if (match) {
-      const distance = Number.parseInt(match[1]);
-      let raceType: '芝' | 'ダート' | '障害' = 'ダート';
-      if (match[2] === '芝') raceType = '芝';
-      else if (match[2] === '障') raceType = '障害';
-      return { distance, raceType };
-    }
-    return { distance: 1200, raceType: 'ダート' };
-  }
-
-  private parseJapaneseDate(dateStr: string): string {
-    const match = dateStr.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
-    if (match) {
-      const year = match[1];
-      const month = match[2].padStart(2, '0');
-      const day = match[3].padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-    return dateStr;
-  }
-
-  private parseRaceType(courseType: string): '芝' | 'ダート' | '障害' | undefined {
-    if (courseType === '芝') return '芝';
-    if (courseType === 'ダート') return 'ダート';
-    if (courseType === '障害') return '障害';
-    return undefined;
-  }
-
-  private parseTrackCondition(condition: string): '良' | '稍重' | '重' | '不良' | undefined {
-    if (['良', '稍重', '重', '不良'].includes(condition)) {
-      return condition as '良' | '稍重' | '重' | '不良';
-    }
-    return undefined;
-  }
-
-  /**
-   * 馬齢から生年を計算
-   *
-   * @remarks
-   * 馬齢はレース開催時点の年齢なので、開催年を基準に計算する。
-   * （現在年基準だと過去レースのインポートで生年がずれる）
-   */
-  private calculateBirthYear(age: number, raceDate?: string): number {
-    const raceYear = raceDate?.match(/^(\d{4})/);
-    const baseYear = raceYear ? Number(raceYear[1]) : new Date().getFullYear();
-    return baseYear - age;
-  }
-
   async extractHorseDataFromHTML(htmlFilePath: string): Promise<void> {
     try {
       console.log(`🔍 HTMLファイルから馬データを抽出中: ${htmlFilePath}`);
 
-      const { HorseDataExtractor } = await import('../utils/HorseDataExtractor.js');
+      const { HorseDataExtractor } = await import('../utils/HorseDataExtractor');
 
       const extractor = HorseDataExtractor.fromFile(htmlFilePath);
       const result = extractor.extractAll({
@@ -347,7 +284,7 @@ export class ImportData {
 
   async extractHorseDataStandalone(htmlFilePath: string, outputFormat: 'detailed' | 'summary' | 'csv' = 'detailed'): Promise<void> {
     try {
-      const { HorseDataExtractor } = await import('../utils/HorseDataExtractor.js');
+      const { HorseDataExtractor } = await import('../utils/HorseDataExtractor');
 
       const extractor = HorseDataExtractor.fromFile(htmlFilePath);
       const result = extractor.extractAll({

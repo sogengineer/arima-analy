@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, spyOn, jest } from 'bun:te
 import { writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { Database } from 'bun:sqlite';
 import { createTestDb, type TestDatabase } from '../../test/helpers/testDb';
-import { ExtractedRaceData, HorseData } from '../../types/HorseData.js';
-import { ImportData } from '../ImportData.js';
+import type { ExtractedRaceData, HorseData } from '../../types/HorseData';
+import { ImportData } from '../ImportData';
+import { RebuildStats } from '../RebuildStats';
 
 /**
  * ImportData インポートテスト
@@ -1214,6 +1215,54 @@ describe('ImportData - importExtractedJSON E2E', () => {
     } finally {
       db.close();
     }
+  });
+
+  it.each(['不明', '2'])('着順%sから1着への訂正を集計し、再インポートで二重計上しない', async (place) => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    const previousRace = createPreviousRace({ place });
+    const raceData = createTestRaceData({
+      horses: [createTestHorse({ previousRaces: [previousRace] })]
+    });
+    writeFileSync(E2E_JSON_PATH, JSON.stringify(raceData));
+    await new ImportData(E2E_DB_PATH).importExtractedJSON(E2E_JSON_PATH);
+
+    const readStats = () => {
+      const db = new Database(E2E_DB_PATH, { readonly: true });
+      try {
+        // テーブル名は補間せず、固定のクエリを並べて引く
+        const statsQueries = [
+          'SELECT runs, wins, places, shows FROM horse_track_stats',
+          'SELECT runs, wins, places, shows FROM horse_course_stats'
+        ];
+        return statsQueries.map(query => db.prepare(query).all());
+      } finally {
+        db.close();
+      }
+    };
+    const initial = place === '不明' ? [] : [{ runs: 1, wins: 0, places: 1, shows: 0 }];
+    expect(readStats()).toEqual([initial, initial]);
+
+    previousRace.place = '1';
+    writeFileSync(E2E_JSON_PATH, JSON.stringify(raceData));
+    const expected = [{ runs: 1, wins: 1, places: 0, shows: 0 }];
+    for (let i = 0; i < 2; i++) {
+      await new ImportData(E2E_DB_PATH).importExtractedJSON(E2E_JSON_PATH);
+      expect(readStats()).toEqual([expected, expected]);
+    }
+
+    // 旧実装でコース集計が欠落し、馬場集計が過大だったDBも修復する。
+    const db = new Database(E2E_DB_PATH);
+    try {
+      db.exec('DELETE FROM horse_course_stats');
+      db.exec('UPDATE horse_track_stats SET runs = 99, places = 98');
+    } finally {
+      db.close();
+    }
+    for (let i = 0; i < 2; i++) {
+      new RebuildStats(E2E_DB_PATH).execute();
+      expect(readStats()).toEqual([expected, expected]);
+    }
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it('同じJSONの再インポートで重複せず更新される', async () => {

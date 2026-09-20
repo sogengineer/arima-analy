@@ -10,6 +10,12 @@ import { DatabaseConnection } from '../database/DatabaseConnection';
 import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
 import type { CourseStats, TrackStats } from '../types/RepositoryTypes';
 
+interface AptitudeAnalysisResult {
+  name: string;
+  aptitudeScore: number;
+  stats: { venue: CourseStats | undefined; track: TrackStats[] };
+}
+
 export class AnalyzeCourse {
   private readonly connection: DatabaseConnection;
   private readonly horseRepo: HorseQueryRepository;
@@ -41,11 +47,11 @@ export class AnalyzeCourse {
       console.log(`📊 ${horses.length}頭の${venueLabel}コース適性を分析します\n`);
 
       // バッチ取得
-      const horseIds = horses.filter(h => h.id != null).map(h => h.id!);
+      const horseIds = this.collectHorseIds(horses);
       const courseStatsMap = this.horseRepo.getHorsesCourseStatsBatch(horseIds);
       const trackStatsMap = this.horseRepo.getHorsesTrackStatsBatch(horseIds);
 
-      const analysisResults: { name: string; aptitudeScore: number; stats: any }[] = [];
+      const analysisResults: AptitudeAnalysisResult[] = [];
 
       for (const horse of horses) {
         if (!horse.id) continue;
@@ -61,34 +67,8 @@ export class AnalyzeCourse {
           ? courseStats.find((s: CourseStats) => s.venue_name === venue)
           : undefined;
 
-        if (venue) {
-          // 特定会場指定時
-          if (venueStats && venueStats.runs > 0) {
-            const winRate = (venueStats.wins / venueStats.runs * 100).toFixed(1);
-            console.log(`  ${venue}コース: ${venueStats.wins}勝/${venueStats.runs}走 (勝率${winRate}%)`);
-          } else {
-            console.log(`  ${venue}コース: 実績なし`);
-          }
-        } else {
-          // 全会場表示
-          if (courseStats.length > 0) {
-            for (const cs of courseStats) {
-              if (cs.runs > 0) {
-                const winRate = (cs.wins / cs.runs * 100).toFixed(1);
-                console.log(`  ${cs.venue_name}コース: ${cs.wins}勝/${cs.runs}走 (勝率${winRate}%)`);
-              }
-            }
-          } else {
-            console.log(`  コース実績なし`);
-          }
-        }
-
-        // 芝の実績
-        const turfStats = trackStats.find((s: TrackStats) => s.race_type === '芝');
-        if (turfStats && turfStats.runs > 0) {
-          const winRate = (turfStats.wins / turfStats.runs * 100).toFixed(1);
-          console.log(`  芝適性: ${turfStats.wins}勝/${turfStats.runs}走 (勝率${winRate}%)`);
-        }
+        this.displayCourseRecord(venue, venueStats, courseStats);
+        this.displayTurfRecord(trackStats);
 
         // 適性スコア算出
         const aptitudeScore = this.calculateAptitudeScore(venueStats, trackStats);
@@ -108,6 +88,69 @@ export class AnalyzeCourse {
       console.error('❌ コース適性分析に失敗:', error);
     } finally {
       this.connection.close();
+    }
+  }
+
+  /**
+   * 詳細付きの馬一覧から、ID を持つ馬の ID だけを取り出す
+   */
+  private collectHorseIds(horses: { id?: number | null }[]): number[] {
+    const horseIds: number[] = [];
+    for (const horse of horses) {
+      if (horse.id != null) {
+        horseIds.push(horse.id);
+      }
+    }
+    return horseIds;
+  }
+
+  /**
+   * コース実績を表示する（会場指定時はその会場、未指定時は全会場）
+   */
+  private displayCourseRecord(
+    venue: string | undefined,
+    venueStats: CourseStats | undefined,
+    courseStats: CourseStats[]
+  ): void {
+    if (!venue) {
+      this.displayAllVenueRecords(courseStats);
+      return;
+    }
+
+    if (venueStats && venueStats.runs > 0) {
+      const winRate = (venueStats.wins / venueStats.runs * 100).toFixed(1);
+      console.log(`  ${venue}コース: ${venueStats.wins}勝/${venueStats.runs}走 (勝率${winRate}%)`);
+      return;
+    }
+
+    console.log(`  ${venue}コース: 実績なし`);
+  }
+
+  /**
+   * 全会場のコース実績を表示する
+   */
+  private displayAllVenueRecords(courseStats: CourseStats[]): void {
+    if (courseStats.length === 0) {
+      console.log(`  コース実績なし`);
+      return;
+    }
+
+    for (const cs of courseStats) {
+      if (cs.runs > 0) {
+        const winRate = (cs.wins / cs.runs * 100).toFixed(1);
+        console.log(`  ${cs.venue_name}コース: ${cs.wins}勝/${cs.runs}走 (勝率${winRate}%)`);
+      }
+    }
+  }
+
+  /**
+   * 芝の実績を表示する（出走実績がある場合のみ）
+   */
+  private displayTurfRecord(trackStats: TrackStats[]): void {
+    const turfStats = trackStats.find((s: TrackStats) => s.race_type === '芝');
+    if (turfStats && turfStats.runs > 0) {
+      const winRate = (turfStats.wins / turfStats.runs * 100).toFixed(1);
+      console.log(`  芝適性: ${turfStats.wins}勝/${turfStats.runs}走 (勝率${winRate}%)`);
     }
   }
 
@@ -151,15 +194,24 @@ export class AnalyzeCourse {
       .sort((a, b) => b.aptitudeScore - a.aptitudeScore)
       .slice(0, 10);
 
-    rankedResults.forEach((horse, index) => {
-      const rank = index + 1;
-      const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${rank}位`;
-      console.log(`${medal} ${horse.name} (${horse.aptitudeScore.toFixed(1)}点)`);
-    });
+    for (let index = 0; index < rankedResults.length; index++) {
+      const horse = rankedResults[index];
+      console.log(`${this.rankMedal(index)} ${horse.name} (${horse.aptitudeScore.toFixed(1)}点)`);
+    }
 
     console.log('\n💡 適性スコア算出方法:');
     console.log('  - ベーススコア: 50点');
     console.log(`  - ${venueLabel}コース実績: 最大30点`);
     console.log('  - 芝実績: 最大20点');
+  }
+
+  /**
+   * 順位に対応するメダル表記を返す（4位以降は「N位」）
+   */
+  private rankMedal(index: number): string {
+    if (index === 0) return '🥇';
+    if (index === 1) return '🥈';
+    if (index === 2) return '🥉';
+    return `${index + 1}位`;
   }
 }

@@ -46,16 +46,10 @@ DBインポートして data/horse-extracted-data.json
 3. race-list スキルで確認
 4. score-calc スキルでレースIDを指定して分析
 
-## 学習データの一括投入は `collect` を使う
+## 蓄積状況の確認
 
-このスキルは**1レースぶんの抽出JSON**を取り込むためのものです。
-一般レースを含む過去レースをまとめて貯める場合は JSON を経由せず、
-fetch-data スキル（または直接 `bun start collect`）を使ってください。
+取り込み後の蓄積量・主要特徴量の欠損率は次のコマンドで確認できます。
 
 ```bash
-bun start collect --month 2024-12   # JRA公式から直接SQLiteへ
-bun start data-status               # 蓄積状況の確認
+bun start data-status
 ```
-
-`collect` は `races` / `race_entries` / `race_results` を一意制約に従って
-UPSERTするため、同じ期間を繰り返し実行しても行は増えません。

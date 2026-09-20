@@ -26,6 +26,21 @@ export function calculateIntervalDays(currentDate: Date, prevDate: Date): number
   return Math.floor((currentDate.getTime() - prevDate.getTime()) / MS_PER_DAY);
 }
 
+/** 距離カテゴリの閾値（メートル） */
+export const DISTANCE_CATEGORY_THRESHOLDS = {
+  sprint: 1400,
+  mile: 1800,
+  middle: 2200
+} as const;
+
+/** 距離カテゴリを取得（短距離 / マイル / 中距離 / 長距離） */
+export function getDistanceCategory(distance: number): string {
+  if (distance < DISTANCE_CATEGORY_THRESHOLDS.sprint) return '短距離';
+  if (distance < DISTANCE_CATEGORY_THRESHOLDS.mile) return 'マイル';
+  if (distance < DISTANCE_CATEGORY_THRESHOLDS.middle) return '中距離';
+  return '長距離';
+}
+
 /** ローテーション間隔が適正範囲内か判定 */
 export function isOptimalRotation(intervalDays: number): boolean {
   return intervalDays >= ROTATION_PERIOD.minDays && intervalDays <= ROTATION_PERIOD.maxDays;

@@ -35,10 +35,7 @@
   "dependencies": {
     "commander": "^11.1.0",
     "iconv-lite": "^0.7.1",
-    "ml-logistic-regression": "^2.0.0",
     "ml-matrix": "^6.10.0",
-    "ml-random-forest": "^2.1.0",
-    "regression": "^2.0.1",
     "simple-statistics": "^7.8.8"
   }
 }

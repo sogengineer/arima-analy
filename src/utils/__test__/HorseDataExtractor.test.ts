@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { HorseDataExtractor } from '../HorseDataExtractor.js';
+import { HorseDataExtractor } from '../HorseDataExtractor';
 
 /**
  * HorseDataExtractor テスト
@@ -111,6 +111,109 @@ describe('HorseDataExtractor', () => {
       expect(horses.map(h => h.raceInfo.assignedWeight)).toEqual([57, 57, 57]);
       // 8頭以下なので枠番＝馬番
       expect(horses.map(h => h.raceInfo.frameNumber)).toEqual([1, 2, 3]);
+    });
+
+    describe('欠損の表現（M4）', () => {
+      /** オッズ・人気ブロックを持たない行 */
+      function horseRowWithoutOdds(num: number, name: string): string {
+        return `<tr>
+          <td class="waku"><img src="/waku/waku${num}.png" alt="枠"></td>
+          <td class="num">${num}</td>
+          <td class="horse">
+            <div class="name"><a href="/horse/${num}">${name}</a></div>
+            <p class="age">牡4</p>
+          </td>
+          <td class="jockey">
+            <p class="jockey"><a href="/jockey/${num}">騎手${num}</a></p>
+            <p class="weight">57.0<span>kg</span></p>
+          </td>
+        </tr>`;
+      }
+
+      it('人気・オッズが取れないときは 0 ではなく undefined を返す', () => {
+        const rows = [horseRowWithoutOdds(1, '欠損馬A'), horseRowWithoutOdds(2, '欠損馬B')];
+        const extractor = new HorseDataExtractor(buildHtml(rows));
+
+        const result = extractor.extractAll({ sortBy: 'horseNumber', includePreviousRaces: false });
+
+        const horses = result.data!.horses;
+        // 0 だと popularityNorm が「1番人気」相当に正規化され、
+        // hasPopularity=1 のまま欠損が特徴量に紛れ込む
+        expect(horses.map(h => h.raceInfo.popularity)).toEqual([undefined, undefined]);
+        expect(horses.map(h => h.raceInfo.winOdds)).toEqual([undefined, undefined]);
+      });
+
+      it('人気・オッズが取れる行では数値が入る', () => {
+        const extractor = new HorseDataExtractor(buildHtml([horseRow(1, '通常馬', '牡4')]));
+
+        const result = extractor.extractAll({ sortBy: 'horseNumber', includePreviousRaces: false });
+
+        const horse = result.data!.horses[0];
+        expect(horse.raceInfo.popularity).toBe(1);
+        expect(horse.raceInfo.winOdds).toBe(2.5);
+      });
+    });
+
+    describe('通算成績の解析（M5）', () => {
+      /** `(1着.2着.3着.着外)` の成績欄つきの行 */
+      function horseRowWithRecord(num: number, name: string, record: string): string {
+        return `<tr>
+          <td class="waku"><img src="/waku/waku${num}.png" alt="枠"></td>
+          <td class="num">${num}</td>
+          <td class="horse">
+            <div class="name"><a href="/horse/${num}">${name}</a></div>
+            <p class="age">牡4</p>
+            <div class="odds"><span class="num"><strong>3.5</strong></span>(1<span>番人気</span>)</div>
+            <div class="cell result">(${record})</div>
+          </td>
+          <td class="jockey">
+            <p class="jockey"><a href="/jockey/${num}">騎手${num}</a></p>
+            <p class="weight">57.0<span>kg</span></p>
+          </td>
+        </tr>`;
+      }
+
+      it('runs は4項目の合計（出走数）。4項目めの着外回数をそのまま使わない', () => {
+        // (3.2.1.6) = 1着3回 / 2着2回 / 3着1回 / 着外6回 → 出走12回
+        const extractor = new HorseDataExtractor(
+          buildHtml([horseRowWithRecord(1, '成績馬', '3.2.1.6')])
+        );
+
+        const result = extractor.extractAll({ sortBy: 'horseNumber', includePreviousRaces: false });
+
+        const record = result.data!.horses[0].record;
+        expect(record.wins).toBe(3);
+        expect(record.places).toBe(2);
+        expect(record.shows).toBe(1);
+        // career_* 列と同じ意味（runs = 出走数）
+        expect(record.runs).toBe(12);
+        // 勝率の分母として整合する（wins <= runs）
+        expect(record.wins).toBeLessThanOrEqual(record.runs);
+      });
+
+      it('未出走 (0.0.0.0) は全て0', () => {
+        const extractor = new HorseDataExtractor(
+          buildHtml([horseRowWithRecord(1, '新馬', '0.0.0.0')])
+        );
+
+        const record = extractor.extractAll({
+          sortBy: 'horseNumber',
+          includePreviousRaces: false
+        }).data!.horses[0].record;
+
+        expect(record).toMatchObject({ wins: 0, places: 0, shows: 0, runs: 0 });
+      });
+
+      it('成績欄が無ければ全て0（出走数を捏造しない）', () => {
+        const extractor = new HorseDataExtractor(buildHtml([horseRow(1, '成績欄なし', '牡4')]));
+
+        const record = extractor.extractAll({
+          sortBy: 'horseNumber',
+          includePreviousRaces: false
+        }).data!.horses[0].record;
+
+        expect(record).toMatchObject({ wins: 0, places: 0, shows: 0, runs: 0 });
+      });
     });
   });
 });

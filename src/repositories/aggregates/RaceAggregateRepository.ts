@@ -15,6 +15,14 @@ import type {
   EntryInsertResult,
   BatchInsertResult
 } from '../../types/RepositoryTypes';
+import {
+  updateRaceRow,
+  insertRaceRow,
+  updateEntryRow,
+  insertEntryRow,
+  updateResultRow,
+  insertResultRow
+} from './RaceRowWriters';
 
 export class RaceAggregateRepository {
   constructor(private readonly db: Database) {}
@@ -27,75 +35,55 @@ export class RaceAggregateRepository {
   insertRace(data: RaceImportData, matchByName: boolean = false): RaceInsertResult {
     return this.db.transaction(() => {
       const venueId = this.getOrCreateVenue(data.venue);
-
-      let existing: { id: number } | undefined;
-
-      if (matchByName) {
-        // 前走データ: レース名＋日付＋会場でマッチング
-        existing = this.db.prepare(`
-          SELECT id FROM races WHERE race_date = ? AND venue_id = ? AND race_name = ?
-        `).get(data.raceDate, venueId, data.raceName) as { id: number } | undefined;
-      } else {
-        // 通常: 日付＋会場＋レース番号でマッチング
-        existing = this.db.prepare(`
-          SELECT id FROM races WHERE race_date = ? AND venue_id = ? AND race_number = ?
-        `).get(data.raceDate, venueId, data.raceNumber ?? 1) as { id: number } | undefined;
-      }
+      const existing = this.findExistingRace(data, venueId, matchByName);
 
       if (existing) {
-        // 既存レースを更新
-        this.db.prepare(`
-          UPDATE races SET
-            race_name = COALESCE(?, race_name),
-            race_class = COALESCE(?, race_class),
-            race_type = COALESCE(?, race_type),
-            distance = COALESCE(?, distance),
-            track_condition = COALESCE(?, track_condition),
-            total_horses = COALESCE(?, total_horses)
-          WHERE id = ?
-        `).run(
-          data.raceName,
-          data.raceClass ?? null,
-          data.raceType ?? null,
-          data.distance,
-          data.trackCondition ?? null,
-          data.totalHorses ?? null,
-          existing.id
-        );
+        updateRaceRow(this.db, existing.id, data);
         return { id: existing.id, updated: true, venueId };
       }
 
-      // 新規作成
-      // 前走データ: レース番号不明のため自動採番
-      let raceNumber: number;
-      if (matchByName && data.raceNumber == null) {
-        // 同じ日・同じ会場の最大race_number + 1 を使用
-        const maxRow = this.db.prepare(`
-          SELECT COALESCE(MAX(race_number), 0) as max_num FROM races
-          WHERE race_date = ? AND venue_id = ?
-        `).get(data.raceDate, venueId) as { max_num: number };
-        raceNumber = maxRow.max_num + 1;
-      } else {
-        raceNumber = data.raceNumber ?? 1;
-      }
-
-      const result = this.db.prepare(`
-        INSERT INTO races (race_date, venue_id, race_number, race_name, race_class, race_type, distance, track_condition, total_horses)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        data.raceDate,
-        venueId,
-        raceNumber,
-        data.raceName,
-        data.raceClass ?? null,
-        data.raceType ?? null,
-        data.distance,
-        data.trackCondition ?? null,
-        data.totalHorses ?? null
-      );
-
-      return { id: result.lastInsertRowid as number, updated: false, venueId };
+      const raceNumber = this.resolveNewRaceNumber(data, venueId, matchByName);
+      return { id: insertRaceRow(this.db, data, venueId, raceNumber), updated: false, venueId };
     })();
+  }
+
+  /**
+   * 同一レースの既存行を突合する
+   *
+   * @param matchByName - 前走データのようにレース番号が不明な場合、レース名で突合する
+   */
+  private findExistingRace(
+    data: RaceImportData,
+    venueId: number,
+    matchByName: boolean
+  ): { id: number } | undefined {
+    if (matchByName) {
+      // 前走データ: レース名＋日付＋会場でマッチング
+      return this.db.prepare(`
+        SELECT id FROM races WHERE race_date = ? AND venue_id = ? AND race_name = ?
+      `).get(data.raceDate, venueId, data.raceName) as { id: number } | undefined;
+    }
+    // 通常: 日付＋会場＋レース番号でマッチング
+    return this.db.prepare(`
+      SELECT id FROM races WHERE race_date = ? AND venue_id = ? AND race_number = ?
+    `).get(data.raceDate, venueId, data.raceNumber ?? 1) as { id: number } | undefined;
+  }
+
+  /** 新規レースのレース番号を決める（前走データでレース番号不明なら自動採番） */
+  private resolveNewRaceNumber(
+    data: RaceImportData,
+    venueId: number,
+    matchByName: boolean
+  ): number {
+    if (matchByName && data.raceNumber == null) {
+      // 同じ日・同じ会場の最大race_number + 1 を使用
+      const maxRow = this.db.prepare(`
+        SELECT COALESCE(MAX(race_number), 0) as max_num FROM races
+        WHERE race_date = ? AND venue_id = ?
+      `).get(data.raceDate, venueId) as { max_num: number };
+      return maxRow.max_num + 1;
+    }
+    return data.raceNumber ?? 1;
   }
 
   /**
@@ -107,7 +95,8 @@ export class RaceAggregateRepository {
       const horse = this.getHorseByNameAndBloodline(
         data.horseName,
         data.sireName,
-        data.mareName
+        data.mareName,
+        data.jraHorseId
       );
       if (!horse) {
         throw new Error(
@@ -123,70 +112,12 @@ export class RaceAggregateRepository {
       `).get(raceId, horse.id) as { id: number } | undefined;
 
       if (existing) {
-        // 既存エントリを更新
-        this.db.prepare(`
-          UPDATE race_entries SET
-            jockey_id = COALESCE(?, jockey_id),
-            frame_number = COALESCE(?, frame_number),
-            horse_number = COALESCE(?, horse_number),
-            assigned_weight = COALESCE(?, assigned_weight),
-            win_odds = COALESCE(?, win_odds),
-            popularity = COALESCE(?, popularity),
-            horse_weight = COALESCE(?, horse_weight),
-            career_wins = COALESCE(?, career_wins),
-            career_places = COALESCE(?, career_places),
-            career_shows = COALESCE(?, career_shows),
-            career_runs = COALESCE(?, career_runs),
-            total_prize_money = COALESCE(?, total_prize_money)
-          WHERE id = ?
-        `).run(
-          jockeyId,
-          data.frameNumber ?? null,
-          data.horseNumber ?? null,
-          data.assignedWeight ?? null,
-          data.winOdds ?? null,
-          data.popularity ?? null,
-          data.horseWeight ?? null,
-          data.careerWins ?? null,
-          data.careerPlaces ?? null,
-          data.careerShows ?? null,
-          data.careerRuns ?? null,
-          data.totalPrizeMoney ?? null,
-          existing.id
-        );
+        updateEntryRow(this.db, existing.id, data, jockeyId);
         return { id: existing.id, updated: true, horseId: horse.id, jockeyId };
       }
 
-      // 新規作成
-      const result = this.db.prepare(`
-        INSERT INTO race_entries (
-          race_id, horse_id, jockey_id, frame_number, horse_number, assigned_weight,
-          win_odds, popularity, horse_weight, career_wins, career_places, career_shows, career_runs, total_prize_money
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        raceId,
-        horse.id,
-        jockeyId,
-        data.frameNumber ?? null,
-        data.horseNumber,
-        data.assignedWeight ?? null,
-        data.winOdds ?? null,
-        data.popularity ?? null,
-        data.horseWeight ?? null,
-        data.careerWins ?? null,
-        data.careerPlaces ?? null,
-        data.careerShows ?? null,
-        data.careerRuns ?? null,
-        data.totalPrizeMoney ?? null
-      );
-
-      return {
-        id: result.lastInsertRowid as number,
-        updated: false,
-        horseId: horse.id,
-        jockeyId
-      };
+      const insertedId = insertEntryRow(this.db, { raceId, horseId: horse.id, jockeyId }, data);
+      return { id: insertedId, updated: false, horseId: horse.id, jockeyId };
     })();
   }
 
@@ -201,43 +132,11 @@ export class RaceAggregateRepository {
       ).get(entryId) as { id: number } | undefined;
 
       if (existing) {
-        // 既存結果を更新
-        this.db.prepare(`
-          UPDATE race_results SET
-            finish_position = COALESCE(?, finish_position),
-            finish_status = COALESCE(?, finish_status),
-            finish_time = COALESCE(?, finish_time),
-            margin = COALESCE(?, margin),
-            last_3f_time = COALESCE(?, last_3f_time),
-            corner_positions = COALESCE(?, corner_positions)
-          WHERE id = ?
-        `).run(
-          data.finishPosition ?? null,
-          data.finishStatus ?? null,
-          data.finishTime ?? null,
-          data.margin ?? null,
-          data.last3fTime ?? null,
-          data.cornerPositions ?? null,
-          existing.id
-        );
+        updateResultRow(this.db, existing.id, data);
         return { id: existing.id, updated: true };
       }
 
-      // 新規作成
-      const result = this.db.prepare(`
-        INSERT INTO race_results (entry_id, finish_position, finish_status, finish_time, margin, last_3f_time, corner_positions)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        entryId,
-        data.finishPosition ?? null,
-        data.finishStatus ?? '完走',
-        data.finishTime ?? null,
-        data.margin ?? null,
-        data.last3fTime ?? null,
-        data.cornerPositions ?? null
-      );
-
-      return { id: result.lastInsertRowid as number, updated: false };
+      return { id: insertResultRow(this.db, entryId, data), updated: false };
     })();
   }
 
@@ -310,8 +209,17 @@ export class RaceAggregateRepository {
   private getHorseByNameAndBloodline(
     name: string,
     sireName?: string,
-    mareName?: string
+    mareName?: string,
+    jraHorseId?: string
   ): { id: number } | undefined {
+    // 血統登録番号があれば最優先。同名馬を確実に区別できる
+    if (jraHorseId) {
+      const byId = this.db.prepare(
+        'SELECT id FROM horses WHERE jra_horse_id = ?'
+      ).get(jraHorseId) as { id: number } | undefined;
+      if (byId) return byId;
+    }
+
     if (sireName || mareName) {
       return this.db.prepare(`
         SELECT h.id FROM horses h

@@ -102,7 +102,7 @@ describe('AnalyzeCourse E2E', () => {
         const stats = courseStatsMap.get(equinox.id) ?? [];
 
         // 東京で過去レースがある
-        const tokyoStats = stats.find((s: any) => s.venue_name === '東京');
+        const tokyoStats = stats.find(s => s.venue_name === '東京');
         if (tokyoStats) {
           expect(tokyoStats.runs).toBeGreaterThan(0);
           expect(tokyoStats.wins).toBeGreaterThanOrEqual(0);
@@ -137,7 +137,7 @@ describe('AnalyzeCourse E2E', () => {
         const trackStatsMap = horseRepo.getHorsesTrackStatsBatch([equinox.id]);
         const stats = trackStatsMap.get(equinox.id) ?? [];
 
-        const turfStats = stats.find((s: any) => s.race_type === '芝');
+        const turfStats = stats.find(s => s.race_type === '芝');
         if (turfStats) {
           expect(turfStats.runs).toBeGreaterThan(0);
         }

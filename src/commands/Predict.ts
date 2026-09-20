@@ -1,175 +1,192 @@
-import { DatabaseConnection } from '../database/DatabaseConnection';
-import { HorseQueryRepository } from '../repositories/queries/HorseQueryRepository';
+/**
+ * 予測コマンド
+ *
+ * @remarks
+ * `MachineLearningModel` の確率予測をそのまま表示する。
+ *
+ * 旧実装は「馬の通算勝率をそのまま勝率とみなし、0.5 で頭打ちにする」という
+ * レース文脈を無視した統計だったため廃止した。現在は:
+ * - 単勝確率 = レース内 softmax（**合計100%**）
+ * - 複勝確率 = 3着以内モデル（**合計300%** に較正）
+ * となり、推奨閾値もこの定義に合わせている。
+ *
+ * ## 予測時点と「妙味」の意味
+ *
+ * モデルは人気順位・単勝オッズを特徴量に持つため、**予測時点は発売締切直前**である
+ * （締切前には使えない）。
+ *
+ * その結果、ここで表示する「妙味 = 単勝確率 − 市場暗黙確率」は
+ * **市場と独立な評価の差ではなく、「市場の誤差」をモデルが推定した量** である。
+ * 市場を情報源に取り込んだうえで、その偏りを補正した結果に過ぎない点に注意すること
+ * （詳細は `docs/MODELS.md` と `src/features/FeatureBuilder.ts` の冒頭）。
+ */
 
-interface PredictionResult {
-  horseName: string;
-  winProbability: number;
-  placeProbability: number;
-  showProbability: number;
+import { DatabaseConnection } from '../database/DatabaseConnection';
+import { RaceQueryRepository } from '../repositories/queries/RaceQueryRepository';
+import { MachineLearningModel, type PredictionResult } from '../models/MachineLearningModel';
+
+/** 馬券推奨の閾値（レース内正規化済み確率に対する基準） */
+export const RECOMMENDATION_THRESHOLDS = {
+  /** 単勝を推奨する単勝確率 */
+  win: 0.25,
+  /** 市場より何ポイント高ければ「妙味あり」とみなすか */
+  valueEdge: 0.03,
+  /** 複勝を推奨する3着以内確率 */
+  show: 0.5
+} as const;
+
+export interface PredictOptions {
+  /** 対象レースID */
+  race?: string;
 }
 
 export class Predict {
-  private readonly connection: DatabaseConnection;
-  private readonly horseRepo: HorseQueryRepository;
+  private readonly connection: DatabaseConnection | null;
+  private readonly raceRepo: RaceQueryRepository;
+  private readonly ml: MachineLearningModel;
 
-  constructor() {
-    this.connection = new DatabaseConnection();
-    this.horseRepo = new HorseQueryRepository(this.connection.getConnection());
+  constructor(externalDb?: ReturnType<DatabaseConnection['getConnection']>) {
+    if (externalDb) {
+      this.connection = null;
+      this.raceRepo = new RaceQueryRepository(externalDb);
+      this.ml = new MachineLearningModel(externalDb);
+    } else {
+      this.connection = new DatabaseConnection();
+      const db = this.connection.getConnection();
+      this.raceRepo = new RaceQueryRepository(db);
+      this.ml = new MachineLearningModel(db);
+    }
   }
 
-  async execute(): Promise<void> {
+  async execute(options: PredictOptions = {}): Promise<void> {
     try {
-      console.log('🤖 統計ベースで連帯・3着内確率を予測中...');
-
-      const horses = this.horseRepo.getAllHorsesWithDetails();
-
-      if (horses.length === 0) {
-        console.log('予測対象の馬がいません');
-        console.log('\n📥 データ入力方法:');
-        console.log('arima fetch-and-extract <JRA URL>');
+      if (!options.race) {
+        this.displayRaceList();
         return;
       }
 
-      console.log(`📊 ${horses.length}頭の予測結果\n`);
-
-      const predictions: PredictionResult[] = [];
-
-      for (const horse of horses) {
-        if (!horse.id) continue;
-
-        const result = this.calculateProbabilities(horse.id, horse.name);
-        predictions.push(result);
+      const race = this.raceRepo.getRaceByIdOrName(options.race);
+      if (!race) {
+        console.log(`❌ レースが見つかりません: ${options.race}`);
+        this.displayRaceList();
+        return;
       }
 
-      // 勝率順にソート
-      predictions.sort((a, b) => b.winProbability - a.winProbability);
+      console.log(`🤖 ${race.race_name}（${race.race_date}）の確率を予測中...\n`);
 
-      // 予測結果表示
+      const predictions = await this.ml.predict(race.id);
+
+      if (predictions.length === 0) {
+        console.log('予測対象の出走馬がいません');
+        console.log('\n📥 データ入力方法:');
+        console.log('  arima fetch-and-extract <JRA URL>');
+        return;
+      }
+
+      if (!this.ml.isTrained()) {
+        console.log('⚠️  学習データが不足しているため、市場の暗黙確率を表示します（全馬オッズありならオッズ、無ければ人気順位から算出）');
+        console.log('   （確率を捏造せず、素直に市場のベースラインを出しています）\n');
+      }
+
       this.displayPredictions(predictions);
-
-      // 投資戦略提案
       this.suggestBettingStrategy(predictions);
-
     } catch (error) {
       console.error('❌ 予測に失敗:', error);
     } finally {
-      this.connection.close();
+      this.close();
     }
   }
 
-  private calculateProbabilities(horseId: number, horseName: string): PredictionResult {
-    const results = this.horseRepo.getHorseRaceResults(horseId);
-
-    if (results.length === 0) {
-      return {
-        horseName,
-        winProbability: 0.05,
-        placeProbability: 0.1,
-        showProbability: 0.15
-      };
+  private displayRaceList(): void {
+    console.log('⚠️  レースIDを指定してください: predict --race <id>');
+    const races = this.raceRepo.getAllRaces().slice(0, 10);
+    if (races.length === 0) {
+      console.log('   登録されているレースがありません');
+      return;
     }
-
-    const totalRaces = results.length;
-    const validResults = results.filter(r => r.finish_position != null);
-
-    const wins = validResults.filter(r => r.finish_position === 1).length;
-    const places = validResults.filter(r => (r.finish_position ?? 99) <= 2).length;
-    const shows = validResults.filter(r => (r.finish_position ?? 99) <= 3).length;
-
-    // 基本確率（実績ベース）
-    let winProb = validResults.length > 0 ? wins / validResults.length : 0.05;
-    let placeProb = validResults.length > 0 ? places / validResults.length : 0.1;
-    let showProb = validResults.length > 0 ? shows / validResults.length : 0.15;
-
-    // 実績が少ない場合は控えめに調整
-    if (validResults.length < 5) {
-      winProb = winProb * 0.7 + 0.05 * 0.3;
-      placeProb = placeProb * 0.7 + 0.1 * 0.3;
-      showProb = showProb * 0.7 + 0.15 * 0.3;
+    console.log('\n【登録済みレース（最新10件）】');
+    for (const race of races) {
+      console.log(`  ${race.id}: ${race.race_date} ${race.venue_name} ${race.race_name}`);
     }
-
-    return {
-      horseName,
-      winProbability: Math.min(winProb, 0.5),
-      placeProbability: Math.min(placeProb, 0.7),
-      showProbability: Math.min(showProb, 0.85)
-    };
   }
 
   private displayPredictions(predictions: PredictionResult[]): void {
-    console.log('🎯 統計ベース予測結果:');
-    console.log('='.repeat(80));
-    console.log('順位  馬名           勝率    連対率   3着内率');
-    console.log('-'.repeat(80));
+    console.log('🎯 予測結果（単勝はレース内合計100%、複勝は合計300%）');
+    console.log('='.repeat(76));
+    console.log('順位  馬名            単勝     複勝     市場     妙味');
+    console.log('-'.repeat(76));
 
     predictions.forEach((pred, index) => {
       const rank = (index + 1).toString().padStart(2);
-      const name = pred.horseName.padEnd(12);
-      const winProb = (pred.winProbability * 100).toFixed(1).padStart(5) + '%';
-      const placeProb = (pred.placeProbability * 100).toFixed(1).padStart(6) + '%';
-      const showProb = (pred.showProbability * 100).toFixed(1).padStart(7) + '%';
+      const name = pred.horseName.padEnd(14);
+      const win = `${(pred.winProbability * 100).toFixed(1).padStart(5)}%`;
+      const show = `${(pred.showProbability * 100).toFixed(1).padStart(6)}%`;
+      const market = `${(pred.marketImpliedProb * 100).toFixed(1).padStart(6)}%`;
+      const edge = pred.winProbability - pred.marketImpliedProb;
+      const edgeStr = `${edge >= 0 ? '+' : ''}${(edge * 100).toFixed(1)}pt`.padStart(8);
 
-      console.log(`${rank}位 ${name} ${winProb} ${placeProb} ${showProb}`);
+      console.log(`${rank}位 ${name} ${win} ${show} ${market} ${edgeStr}`);
     });
 
+    console.log('');
+    console.log('※ 予測時点は「発売締切直前」（人気・オッズを特徴量に使うため）。');
+    console.log('   「妙味」は市場と独立な差ではなく、モデルが推定した **市場の誤差** です。');
     console.log('');
   }
 
   private suggestBettingStrategy(predictions: PredictionResult[]): void {
+    if (predictions.length === 0) return;
+
     console.log('💡 投資戦略提案:');
     console.log('='.repeat(50));
 
-    // 本命候補（勝率上位）
-    const favorites = predictions.slice(0, 3);
+    const top = predictions[0];
     console.log('🥇 本命候補:');
-    favorites.forEach((pred, index) => {
-      const rank = index + 1;
-      const winRate = (pred.winProbability * 100).toFixed(1);
-      console.log(`  ${rank}. ${pred.horseName} (勝率${winRate}%)`);
+    predictions.slice(0, 3).forEach((pred, index) => {
+      console.log(
+        `  ${index + 1}. ${pred.horseName}（単勝${(pred.winProbability * 100).toFixed(1)}%）`
+      );
     });
 
-    // 穴馬候補（勝率と連対率の差が大きい）
-    const darkHorses = predictions
-      .filter(pred => pred.winProbability < 0.15 && pred.placeProbability > 0.25)
-      .sort((a, b) => (b.placeProbability - b.winProbability) - (a.placeProbability - a.winProbability))
-      .slice(0, 2);
+    // 妙味馬: モデル確率が市場の暗黙確率を上回る馬
+    const valueHorses = predictions
+      .filter(p => p.winProbability - p.marketImpliedProb >= RECOMMENDATION_THRESHOLDS.valueEdge)
+      .slice(0, 3);
 
-    if (darkHorses.length > 0) {
-      console.log('\n🎲 穴馬候補:');
-      darkHorses.forEach((pred, index) => {
-        const placeRate = (pred.placeProbability * 100).toFixed(1);
-        console.log(`  ${index + 1}. ${pred.horseName} (連対率${placeRate}%)`);
+    if (valueHorses.length > 0) {
+      console.log('\n🎲 市場より高く評価している馬（＝市場の誤差が大きいとモデルが見た馬）:');
+      valueHorses.forEach((pred, index) => {
+        const edge = (pred.winProbability - pred.marketImpliedProb) * 100;
+        console.log(`  ${index + 1}. ${pred.horseName}（市場比 +${edge.toFixed(1)}pt）`);
       });
+    } else {
+      console.log('\n🎲 市場を明確に上回る評価の馬はありません');
     }
 
-    // 推奨馬券
-    this.recommendTickets(predictions);
+    console.log('\n🎫 推奨馬券:');
+    if (top.winProbability >= RECOMMENDATION_THRESHOLDS.win) {
+      console.log(`  単勝: ${top.horseName}（単勝${(top.winProbability * 100).toFixed(1)}%）`);
+    }
+    const showCandidates = predictions.filter(
+      p => p.showProbability >= RECOMMENDATION_THRESHOLDS.show
+    );
+    if (showCandidates.length > 0) {
+      console.log(`  複勝: ${showCandidates.map(p => p.horseName).join(' / ')}`);
+    }
+    if (predictions.length >= 3) {
+      console.log(
+        `  3連複: ${predictions.slice(0, 3).map(p => p.horseName).join(' - ')}`
+      );
+    }
+
+    console.log('\n※ 確率は較正済みですが、採用可否は `arima ml --validate` の');
+    console.log('   採用ゲート（log loss が市場を下回るか）で判断してください。');
   }
 
-  private recommendTickets(predictions: PredictionResult[]): void {
-    console.log('\n🎫 推奨馬券:');
-
-    const top5 = predictions.slice(0, 5);
-    const topHorse = predictions[0];
-
-    // 単勝
-    if (topHorse.winProbability > 0.2) {
-      console.log(`単勝: ${topHorse.horseName} (勝率${(topHorse.winProbability * 100).toFixed(1)}%)`);
-    }
-
-    // 馬連
-    if (top5.length >= 2) {
-      const secondHorse = predictions[1];
-      const combinedProb = topHorse.placeProbability + secondHorse.placeProbability;
-      if (combinedProb > 0.4) {
-        console.log(`馬連: ${topHorse.horseName} - ${secondHorse.horseName}`);
-      }
-    }
-
-    // 3連複
-    if (top5.length >= 3) {
-      const thirdHorse = predictions[2];
-      console.log(`3連複: ${topHorse.horseName} - ${predictions[1].horseName} - ${thirdHorse.horseName}`);
+  close(): void {
+    this.ml.close();
+    if (this.connection) {
+      this.connection.close();
     }
   }
 }

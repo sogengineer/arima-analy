@@ -193,6 +193,40 @@ export const POST_POSITION_SCORES: Record<number | 'default', number> = {
   default: 50  // 枠不明の場合
 } as const;
 
+/**
+ * JRAの枠番割当規則に基づいて馬番から枠番を計算
+ *
+ * @remarks
+ * 8枠制。8頭以下は馬番＝枠番。9頭以上は各枠に ⌊総頭数/8⌋ 頭を基本とし、
+ * 余り（総頭数 mod 8）の頭数ぶんだけ大きい枠番の枠から順に1頭ずつ多く割り当てる。
+ * 例: 14頭は1〜2枠が1頭・3〜8枠が2頭、17頭は8枠のみ3頭、18頭は7・8枠が3頭。
+ *
+ * @param horseNumber - 馬番
+ * @param totalHorses - 出走総頭数
+ * @returns 枠番（1-8）
+ */
+export function calculateFrameNumber(horseNumber: number, totalHorses: number): number {
+  const FRAME_COUNT = 8;
+  if (horseNumber < 1) return 1;
+  if (totalHorses <= FRAME_COUNT) {
+    return Math.min(horseNumber, FRAME_COUNT);
+  }
+
+  const base = Math.floor(totalHorses / FRAME_COUNT);
+  const extra = totalHorses % FRAME_COUNT;
+  // 小さい枠番側: base頭ずつ入る枠が (8 - extra) 枠
+  const smallFrames = FRAME_COUNT - extra;
+  const boundary = smallFrames * base; // base頭枠に入る最後の馬番
+
+  if (horseNumber <= boundary) {
+    return Math.ceil(horseNumber / base);
+  }
+  return Math.min(
+    FRAME_COUNT,
+    smallFrames + Math.ceil((horseNumber - boundary) / (base + 1))
+  );
+}
+
 /** 枠順スコアを取得するヘルパー */
 export function getPostPositionScore(position: number): number {
   if (position >= 1 && position <= 8) {

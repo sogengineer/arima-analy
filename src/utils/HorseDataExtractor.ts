@@ -1,17 +1,20 @@
 import { readFileSync } from 'node:fs';
-import {
+import type {
   HorseData,
   HorseBasicInfo,
   BloodlineInfo,
   JockeyInfo,
   RaceInfo,
   RaceRecord,
-  PreviousRaceResult,
   RaceOverview,
   ExtractedRaceData,
   ExtractionOptions,
   ExtractionResult
-} from '../types/HorseData.js';
+} from '../types/HorseData';
+import { calculateFrameNumber } from '../constants/ScoringConstants';
+import { parseRaceHeader, parseCourseType } from './JRAPageParser';
+import { normalizeSex, parsePreviousRaces } from './HorseDataFields';
+import { formatExtractedRaceData } from './HorseDataFormatter';
 
 export class HorseDataExtractor {
   private htmlContent: string;
@@ -59,7 +62,7 @@ export class HorseDataExtractor {
     // 馬データのマッチング（マルチライン対応、前走データまで含める）
     // 馬番が空の場合（枠順未確定）にも対応: (\d+)? で馬番をオプションに
     const horseMatches = [...this.htmlContent.matchAll(
-      /<tr>\s*<td class="waku">.*?<td class="num">(?:<span[^>]*>.*?<\/span>\s*)?(\d+)?.*?<\/td>\s*<td class="horse">(.*?)<\/td>\s*<td class="jockey">(.*?)<\/td>(.*?)<\/tr>/gs
+      /<tr>\s*<td class="waku">(.*?)<\/td>\s*<td class="num">(?:<span[^>]*>.*?<\/span>\s*)?(\d+)?.*?<\/td>\s*<td class="horse">(.*?)<\/td>\s*<td class="jockey">(.*?)<\/td>(.*?)<\/tr>/gs
     )];
     // 枠番の計算に総頭数が必要なため、先に全馬をマッチングしてから処理する
     const totalHorses = horseMatches.length;
@@ -68,19 +71,21 @@ export class HorseDataExtractor {
     for (const match of horseMatches) {
       index++;
       // 馬番が空の場合は出走順（index）を使用
-      const horseNumber = match[1] ? Number.parseInt(match[1]) : index;
-      const horseData = match[2];
-      const jockeyData = match[3];
-      const pastRacesData = match[4]; // 前走データ部分
+      const horseNumber = match[2] ? Number.parseInt(match[2], 10) : index;
+      const wakuData = match[1];
+      const horseData = match[3];
+      const jockeyData = match[4];
+      const pastRacesData = match[5]; // 前走データ部分
 
       try {
         const basicInfo = this.parseBasicInfo(horseData);
-        const bloodline = options.includeBloodline !== false ? this.parseBloodline(horseData) : this.getEmptyBloodline();
+        const bloodline = options.includeBloodline === false ? this.getEmptyBloodline() : this.parseBloodline(horseData);
         const jockey = this.parseJockeyInfo(jockeyData);
-        const raceInfo = this.parseRaceInfo_Horse(horseData, horseNumber, jockey.weight, totalHorses);
+        const raceInfo = this.parseRaceInfo_Horse(horseData, wakuData, horseNumber, jockey.weight, totalHorses);
         const record = this.parseRaceRecord(horseData);
-        const previousRaces = options.includePreviousRaces !== false ?
-          this.parsePreviousRaces(pastRacesData, options.maxPreviousRaces || 4) : [];
+        const previousRaces = options.includePreviousRaces === false
+          ? []
+          : parsePreviousRaces(pastRacesData, options.maxPreviousRaces || 4);
 
         horses.push({
           basicInfo,
@@ -102,6 +107,9 @@ export class HorseDataExtractor {
     const nameMatch = horseData.match(/<div class="name">.*?<a.*?>(.*?)<\/a><\/div>/);
     const name = nameMatch ? nameMatch[1].trim() : '';
 
+    // 血統登録番号（同名馬を区別する唯一のキー）
+    const jraHorseId = horseData.match(/accessU\.html\?CNAME=pw01dud\d\d(\d{10})/)?.[1];
+
     const ownerMatch = horseData.match(/<p class="owner">(.*?)<\/p>/);
     const ownerName = ownerMatch ? ownerMatch[1].trim() : '';
 
@@ -118,15 +126,12 @@ export class HorseDataExtractor {
     // 見つからない場合は馬データ全体から検索。取得できなければ従来のデフォルト値
     const ageBlockMatch = horseData.match(/<p class="age">(.*?)<\/p>/);
     const ageSexMatch = (ageBlockMatch ? ageBlockMatch[1] : horseData).match(/(牡|牝|セン|セ|騸)\s*(\d{1,2})/);
-    const sex: '牡' | '牝' | '騸' =
-      ageSexMatch == null ? '牡'
-      : ageSexMatch[1] === '牡' ? '牡'
-      : ageSexMatch[1] === '牝' ? '牝'
-      : '騸';
-    const age = ageSexMatch ? Number.parseInt(ageSexMatch[2]) : 2;
+    const sex = normalizeSex(ageSexMatch?.[1]);
+    const age = ageSexMatch ? Number.parseInt(ageSexMatch[2], 10) : 2;
 
     return {
       name,
+      jraHorseId,
       age,
       sex,
       color: '',
@@ -160,19 +165,48 @@ export class HorseDataExtractor {
     return { name, weight };
   }
 
-  private parseRaceInfo_Horse(horseData: string, horseNumber: number, assignedWeight: number, totalHorses: number): RaceInfo {
+  private parseRaceInfo_Horse(
+    horseData: string,
+    wakuData: string,
+    horseNumber: number,
+    assignedWeight: number,
+    totalHorses: number
+  ): RaceInfo {
+    // オッズ・人気は取得できなければ undefined。
+    // 0 を返すと「1番人気（popularityNorm=0）」や「オッズ0倍」として扱われ、
+    // 欠損が特徴量に紛れ込む（欠損は NULL として DB に入れる）。
     const oddsMatch = horseData.match(/<span class="num"><strong.*?>([\d.]+)<\/strong>/);
-    const winOdds = oddsMatch ? Number.parseFloat(oddsMatch[1]) : 0;
+    const parsedOdds = oddsMatch ? Number.parseFloat(oddsMatch[1]) : Number.NaN;
+    const winOdds = Number.isFinite(parsedOdds) && parsedOdds > 0 ? parsedOdds : undefined;
 
     const popularityMatch = horseData.match(/\((\d+)<span>番人気<\/span>\)/);
-    const popularity = popularityMatch ? Number.parseInt(popularityMatch[1]) : 0;
+    const parsedPopularity = popularityMatch
+      ? Number.parseInt(popularityMatch[1], 10)
+      : Number.NaN;
+    const popularity =
+      Number.isFinite(parsedPopularity) && parsedPopularity >= 1 ? parsedPopularity : undefined;
+
+    // 馬体重: <div class="cell weight">526kg<span class="transition">(+6)</span></div>
+    const horseWeightMatch = horseData.match(
+      /<div class="cell weight">\s*(\d+)kg(?:<span class="transition">\(([+-]?\d+)\)<\/span>)?/
+    );
+    const horseWeight = horseWeightMatch ? Number.parseInt(horseWeightMatch[1], 10) : undefined;
+    const weightChange =
+      horseWeightMatch?.[2] == null ? undefined : Number.parseInt(horseWeightMatch[2], 10);
+
+    // 枠番は枠色画像（/JRADB/img/waku/4.png）が正。無い場合のみ馬番から算出する
+    const wakuFromImage = wakuData.match(/\/img\/waku\/(\d+)\.png/);
 
     return {
-      frameNumber: HorseDataExtractor.calculateFrameNumber(horseNumber, totalHorses),
+      frameNumber: wakuFromImage
+        ? Number.parseInt(wakuFromImage[1], 10)
+        : HorseDataExtractor.calculateFrameNumber(horseNumber, totalHorses),
       horseNumber,
       assignedWeight,
       winOdds,
-      popularity
+      popularity,
+      horseWeight,
+      weightChange
     };
   }
 
@@ -185,27 +219,19 @@ export class HorseDataExtractor {
    * 例: 14頭は1〜2枠が1頭・3〜8枠が2頭、17頭は8枠のみ3頭、18頭は7・8枠が3頭。
    */
   static calculateFrameNumber(horseNumber: number, totalHorses: number): number {
-    const FRAME_COUNT = 8;
-    if (horseNumber < 1) return 1;
-    if (totalHorses <= FRAME_COUNT) {
-      return Math.min(horseNumber, FRAME_COUNT);
-    }
-
-    const base = Math.floor(totalHorses / FRAME_COUNT);
-    const extra = totalHorses % FRAME_COUNT;
-    // 小さい枠番側: base頭ずつ入る枠が (8 - extra) 枠
-    const smallFrames = FRAME_COUNT - extra;
-    const boundary = smallFrames * base; // base頭枠に入る最後の馬番
-
-    if (horseNumber <= boundary) {
-      return Math.ceil(horseNumber / base);
-    }
-    return Math.min(
-      FRAME_COUNT,
-      smallFrames + Math.ceil((horseNumber - boundary) / (base + 1))
-    );
+    return calculateFrameNumber(horseNumber, totalHorses);
   }
 
+  /**
+   * 通算成績 `(1着.2着.3着.着外)` を解析する
+   *
+   * @remarks
+   * JRAの成績表記は **(1着.2着.3着.着外)** の4項目。
+   * 4項目めは「着外回数」であって出走数ではないため、
+   * `runs`（出走数）は4項目の合計にする。
+   * これで `race_entries.career_*`
+   * （runs=出走数 / wins=1着 / places=2着 / shows=3着）と意味が一致する。
+   */
   private parseRaceRecord(horseData: string): RaceRecord {
     const recordMatch = horseData.match(/<div class="cell result">\((.*?)\)<\/div>/);
     if (!recordMatch) {
@@ -213,10 +239,15 @@ export class HorseDataExtractor {
     }
 
     const record = recordMatch[1].split('.');
-    const wins = Number.parseInt(record[0] || '0');
-    const places = Number.parseInt(record[1] || '0');
-    const shows = Number.parseInt(record[2] || '0');
-    const runs = Number.parseInt(record[3] || '0');
+    const toCount = (value: string | undefined): number => {
+      const n = Number.parseInt(value ?? '0', 10);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
+    const wins = toCount(record[0]);
+    const places = toCount(record[1]);
+    const shows = toCount(record[2]);
+    const unplaced = toCount(record[3]);
+    const runs = wins + places + shows + unplaced;
 
     const prizeMatch = horseData.match(/<div class="cell win"[^>]*>(.*?)<\/div>/);
     const prizeMoney = prizeMatch ? prizeMatch[1].replace(/title="[^"]*"/, '').trim() : undefined;
@@ -224,100 +255,78 @@ export class HorseDataExtractor {
     return { wins, places, shows, runs, prizeMoney };
   }
 
-  private parsePreviousRaces(pastRacesHtml: string, maxRaces: number): PreviousRaceResult[] {
-    const races: PreviousRaceResult[] = [];
-    const positions: PreviousRaceResult['position'][] = ['front', 'second', 'third', 'fourth'];
+  /**
+   * レース概要（日付・会場・レース番号・距離・芝ダ・馬場状態・クラス）を抽出する
+   *
+   * @remarks
+   * 旧実装は距離1200m・ダート・良をハードコードしており、
+   * 有馬記念（芝2500m）を含むどのレースを取り込んでも条件が壊れていた。
+   * 現在はJRA出馬表・レース結果の共通ヘッダ（`race_header`）から実値を読む。
+   * 会場を「中山」に固定していたフォールバックも撤去し、一般レースに対応する。
+   */
+  private parseRaceInfo(): RaceOverview {
+    const header = parseRaceHeader(this.htmlContent);
 
-    // 前走データの抽出（p1=前走, p2=前々走, p3=3走前, p4=4走前）
-    const pastMatches = pastRacesHtml.matchAll(/<td class="past p(\d+)[^"]*"[^>]*>([\s\S]*?)<\/td>/g);
-
-    for (const match of pastMatches) {
-      const raceIndex = Number.parseInt(match[1]) - 1;
-      if (raceIndex >= maxRaces) continue;
-
-      const pastData = match[2];
-      if (!pastData.trim()) continue;
-
-      // 各種データの抽出
-      const dateMatch = pastData.match(/<div class="date">(.*?)<\/div>/);
-      const trackMatch = pastData.match(/<div class="rc">(.*?)<\/div>/);
-      const raceNameMatch = pastData.match(/<div class="name">.*?<a[^>]*>(.*?)<\/a>/s);
-      const placeMatch = pastData.match(/<div class="place">(\d+)<span>/);
-      const totalHorsesMatch = pastData.match(/<span class="max">(\d+)<span>頭<\/span>/);
-      const gateMatch = pastData.match(/<span class="gate">(\d+)<span>番<\/span>/);
-      const popMatch = pastData.match(/<span class="pop">(\d+)<span>番人気<\/span>/);
-      const jockeyRawMatch = pastData.match(/<div class="jockey">(.*?)<\/div>/);
-      // HTMLタグを除去して騎手名のみ抽出
-      const jockeyMatch = jockeyRawMatch ? [jockeyRawMatch[0], jockeyRawMatch[1].replace(/<[^>]+>/g, '')] : null;
-      const weightMatch = pastData.match(/<div class="weight">\s*([\d.]+)<span>kg<\/span>/);
-      const distMatch = pastData.match(/<span class="dist">(.*?)<\/span>/);
-      const conditionMatch = pastData.match(/<span class="condition">(.*?)<\/span>/);
-      const timeMatch = pastData.match(/<p class="time">(.*?)<\/p>/);
-      const horseWeightMatch = pastData.match(/<p class="h_weight">(\d+)<span>kg<\/span>/);
-      const winnerMatch = pastData.match(/<p class="fin">(.*?)<span/);
-
-      if (dateMatch) {
-        races.push({
-          position: positions[raceIndex] || 'fourth',
-          date: dateMatch[1].trim(),
-          track: trackMatch ? trackMatch[1].trim() : '',
-          raceName: raceNameMatch ? raceNameMatch[1].trim() : '',
-          place: placeMatch ? placeMatch[1] : '',
-          totalHorses: totalHorsesMatch ? Number.parseInt(totalHorsesMatch[1]) : 0,
-          gateNumber: gateMatch ? Number.parseInt(gateMatch[1]) : 0,
-          popularity: popMatch ? Number.parseInt(popMatch[1]) : 0,
-          jockey: jockeyMatch ? jockeyMatch[1].trim() : '',
-          weight: weightMatch ? Number.parseFloat(weightMatch[1]) : 0,
-          distance: distMatch ? distMatch[1].trim() : '',
-          trackCondition: conditionMatch ? conditionMatch[1].trim() : '',
-          time: timeMatch ? timeMatch[1].trim() : undefined,
-          horseWeight: horseWeightMatch ? Number.parseInt(horseWeightMatch[1]) : undefined,
-          winner: winnerMatch ? winnerMatch[1].trim() : undefined
-        });
-      }
+    if (header) {
+      return {
+        date: header.date,
+        venue: header.venue,
+        raceNumber: header.raceNumber,
+        raceName: header.raceName,
+        distance: header.distance,
+        // 出馬表（発走前）には馬場状態が載らないため、取れない場合は空文字にする。
+        // ここで '良' を埋めると馬場適性スコアが事実と無関係に動く。
+        trackCondition: header.trackCondition ?? '',
+        courseType: header.courseType,
+        startTime: header.startTime,
+        raceClass: header.grade ?? header.raceClass
+      };
     }
 
-    // position順にソート
-    return races.sort((a, b) => positions.indexOf(a.position) - positions.indexOf(b.position));
+    // ヘッダが読めないHTML（旧レイアウト・部分保存など）向けの縮退動作
+    return this.parseRaceInfoFallback();
   }
 
-  private parseRaceInfo(): RaceOverview {
-    // レース情報の基本解析
-    const titleMatch = this.htmlContent.match(/<title>(.*?)<\/title>/);
-    const title = titleMatch ? titleMatch[1].trim() : '';
+  /**
+   * 共通ヘッダが見つからない場合の縮退抽出
+   *
+   * @remarks
+   * 取得できなかった項目は**推測値で埋めない**。距離0・馬場状態空で返し、
+   * 呼び出し側（警告表示・インポート）が欠損として扱えるようにする。
+   */
+  private parseRaceInfoFallback(): RaceOverview {
+    const title = this.htmlContent.match(/<title>(.*?)<\/title>/)?.[1]?.trim() ?? '';
 
-    // HTMLから「2025年12月28日（日曜）5回中山8日 1レース」形式を抽出
-    const raceHeaderInfo = this.extractRaceHeaderInfo();
+    // 「2025年12月28日（日曜）5回中山8日 1レース」形式
+    const match = this.htmlContent.match(
+      /(\d{4})年(\d{1,2})月(\d{1,2})日（[^）]+）\d+回([^\d]+)\d+日\s*(\d+)レース/
+    );
 
-    return {
-      date: raceHeaderInfo.date,
-      venue: raceHeaderInfo.venue,
-      raceNumber: raceHeaderInfo.raceNumber,
-      raceName: title,
-      distance: 1200,
-      trackCondition: '良',
-      courseType: 'ダート'
-    };
-  }
-
-  private extractRaceHeaderInfo(): { date: string; venue: string; raceNumber: number } {
-    // パターン: 2025年12月28日（日曜）5回中山8日 1レース
-    const match = this.htmlContent.match(/(\d{4})年(\d{1,2})月(\d{1,2})日（[^）]+）\d+回([^\d]+)\d+日\s*(\d+)レース/);
+    const distanceMatch = this.htmlContent.match(/([\d,]+)\s*(?:メートル|m)\s*[（(]\s*(芝|ダート|ダ|障害)/);
+    const distance = distanceMatch ? Number(distanceMatch[1].replace(/,/g, '')) : 0;
+    const courseType = distanceMatch ? parseCourseType(distanceMatch[2]) : '芝';
 
     if (match) {
       const [, year, month, day, venue, raceNum] = match;
       return {
         date: `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`,
         venue: venue.trim(),
-        raceNumber: Number.parseInt(raceNum)
+        raceNumber: Number.parseInt(raceNum, 10),
+        raceName: title,
+        distance,
+        trackCondition: '',
+        courseType
       };
     }
 
-    // フォールバック: URLから日付のみ抽出
     return {
       date: this.extractDateFromUrl(),
-      venue: '中山',
-      raceNumber: 1
+      venue: '',
+      raceNumber: 0,
+      raceName: title,
+      distance,
+      trackCondition: '',
+      courseType
     };
   }
 
@@ -337,13 +346,15 @@ export class HorseDataExtractor {
   }
 
   private sortHorses(horses: HorseData[], sortBy: string): HorseData[] {
+    // 欠損（undefined）は末尾に送る
+    const key = (v: number | undefined): number => (v == null ? Number.POSITIVE_INFINITY : v);
     switch (sortBy) {
       case 'popularity':
-        return horses.sort((a, b) => a.raceInfo.popularity - b.raceInfo.popularity);
+        return horses.sort((a, b) => key(a.raceInfo.popularity) - key(b.raceInfo.popularity));
       case 'horseNumber':
         return horses.sort((a, b) => a.raceInfo.horseNumber - b.raceInfo.horseNumber);
       case 'odds':
-        return horses.sort((a, b) => a.raceInfo.winOdds - b.raceInfo.winOdds);
+        return horses.sort((a, b) => key(a.raceInfo.winOdds) - key(b.raceInfo.winOdds));
       default:
         return horses;
     }
@@ -356,7 +367,7 @@ export class HorseDataExtractor {
       if (!horse.basicInfo.name) {
         warnings.push(`馬番${horse.raceInfo.horseNumber}: 馬名が取得できませんでした`);
       }
-      if (horse.raceInfo.winOdds === 0) {
+      if (horse.raceInfo.winOdds == null) {
         warnings.push(`${horse.basicInfo.name}: オッズが取得できませんでした`);
       }
     });
@@ -369,59 +380,6 @@ export class HorseDataExtractor {
   }
 
   formatOutput(data: ExtractedRaceData, format: 'detailed' | 'summary' | 'csv' = 'detailed'): string {
-    switch (format) {
-      case 'summary':
-        return this.formatSummary(data);
-      case 'csv':
-        return this.formatCSV(data);
-      default:
-        return this.formatDetailed(data);
-    }
-  }
-
-  private formatDetailed(data: ExtractedRaceData): string {
-    let output = `\n=== JRA競走馬詳細データ ===\n`;
-    output += `抽出件数: ${data.horseCount}頭\n`;
-    output += `レース: ${data.raceInfo.raceName}\n`;
-    output += `開催日: ${data.raceInfo.date}\n\n`;
-
-    data.horses.forEach(horse => {
-      output += `${horse.raceInfo.popularity}番人気: ${horse.basicInfo.name} (${horse.raceInfo.winOdds}倍)\n`;
-      output += `  馬番: ${horse.raceInfo.horseNumber}番\n`;
-      output += `  戦績: ${horse.record.wins}.${horse.record.places}.${horse.record.shows}.${horse.record.runs}\n`;
-      output += `  総賞金: ${horse.record.prizeMoney || 'なし'}\n`;
-      output += `  負担重量: ${horse.jockey.weight}kg\n`;
-      output += `  騎手: ${horse.jockey.name || 'なし'}\n`;
-      output += `  馬主: ${horse.basicInfo.ownerName || 'なし'}\n`;
-      output += `  生産者: ${horse.basicInfo.breederName || 'なし'}\n`;
-      output += `  調教師: ${horse.basicInfo.trainerName || 'なし'}\n`;
-      output += `  血統: ${horse.bloodline.sire || 'なし'} × ${horse.bloodline.mare || 'なし'}\n`;
-      
-      if (horse.previousRaces.length > 0) {
-        output += `  過去成績:\n`;
-        horse.previousRaces.forEach((race, index) => {
-          const raceType = ['前走', '前々走', '3走前', '4走前'][index];
-          output += `    ${raceType}: ${race.date} ${race.raceName}\n`;
-        });
-      }
-      output += '\n';
-    });
-
-    return output;
-  }
-
-  private formatSummary(data: ExtractedRaceData): string {
-    return data.horses.map(horse => 
-      `${horse.raceInfo.popularity}番人気: ${horse.basicInfo.name} (${horse.raceInfo.winOdds}倍)`
-    ).join('\n');
-  }
-
-  private formatCSV(data: ExtractedRaceData): string {
-    const headers = ['人気,馬名,馬番,オッズ,騎手,調教師,馬主,戦績'];
-    const rows = data.horses.map(horse => 
-      `${horse.raceInfo.popularity},${horse.basicInfo.name},${horse.raceInfo.horseNumber},${horse.raceInfo.winOdds},${horse.jockey.name},${horse.basicInfo.trainerName},${horse.basicInfo.ownerName},"${horse.record.wins}.${horse.record.places}.${horse.record.shows}.${horse.record.runs}"`
-    );
-    
-    return [headers, ...rows].join('\n');
+    return formatExtractedRaceData(data, format);
   }
 }
